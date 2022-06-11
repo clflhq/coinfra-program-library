@@ -145,7 +145,7 @@ describe("anchor-escrow", () => {
         instructions: [
           await program.account.escrowAccount.createInstruction(escrowAccount),
         ],
-        signers: [escrowAccount, initializerMainAccount], // ここがescrowAccount必要なの？
+        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとエラーになる
       }
     );
 
@@ -264,6 +264,10 @@ describe("anchor-escrow", () => {
     // Check all the funds are still there.
     assert.ok(_initializerTokenAccountA.amount.toNumber() == initializerAmount);
 
-    // token AccountBも動いてないことを追加してみる？
+    // token AccountBのチェックを入れてみた
+    const _initializerTokenAccountB = await mintB.getAccountInfo(
+      initializerTokenAccountB
+    );
+    assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
   });
 });
