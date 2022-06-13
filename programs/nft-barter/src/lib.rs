@@ -17,7 +17,6 @@ pub mod nft_barter {
 
     pub fn initialize(
         ctx: Context<Initialize>,
-        _vault_account_bump: u8,
         initializer_amount: u64,
         taker_amount: u64,
     ) -> ProgramResult {
@@ -38,6 +37,7 @@ pub mod nft_barter {
             .key;
         ctx.accounts.escrow_account.initializer_amount = initializer_amount;
         ctx.accounts.escrow_account.taker_amount = taker_amount;
+        ctx.accounts.escrow_account.bump = *ctx.bumps.get("vault_account").unwrap();
 
         let (vault_authority, _vault_authority_bump) =
             Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
@@ -110,7 +110,7 @@ pub mod nft_barter {
 Model
 */
 #[derive(Accounts)]
-#[instruction(vault_account_bump: u8, initializer_amount: u64)]
+#[instruction(initializer_amount: u64)]
 pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
@@ -142,10 +142,11 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct Cancel<'info> {
+    // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
     /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, signer)] // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
+    #[account(mut, signer)]
     pub initializer: AccountInfo<'info>,
-    #[account(mut)]
+    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.bump)]
     pub vault_account: Account<'info, TokenAccount>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
@@ -187,7 +188,7 @@ pub struct Exchange<'info> {
         close = initializer
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
-    #[account(mut)]
+    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.bump)]
     pub vault_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
@@ -202,6 +203,7 @@ pub struct EscrowAccount {
     pub initializer_receive_token_account: Pubkey,
     pub initializer_amount: u64,
     pub taker_amount: u64,
+    pub bump: u8,
 }
 
 /*
@@ -232,7 +234,8 @@ impl<'info> Initialize<'info> {
 impl<'info> Cancel<'info> {
     fn into_transfer_to_initializer_context(
         &self,
-    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> { // 読んだ
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        // 読んだ
         let cpi_accounts = Transfer {
             from: self.vault_account.to_account_info().clone(),
             to: self
@@ -244,7 +247,8 @@ impl<'info> Cancel<'info> {
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> { // 読んだがExchangeと同じなので共通化したいところ
+    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        // 読んだがExchangeと同じなので共通化したいところ
         let cpi_accounts = CloseAccount {
             account: self.vault_account.to_account_info().clone(),
             destination: self.initializer.clone(),
@@ -257,7 +261,8 @@ impl<'info> Cancel<'info> {
 impl<'info> Exchange<'info> {
     fn into_transfer_to_initializer_context(
         &self,
-    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> { // 読んだ
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        // 読んだ
         let cpi_accounts = Transfer {
             from: self.taker_deposit_token_account.to_account_info().clone(),
             to: self
@@ -269,7 +274,8 @@ impl<'info> Exchange<'info> {
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn into_transfer_to_taker_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> { // 読んだ
+    fn into_transfer_to_taker_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        // 読んだ
         let cpi_accounts = Transfer {
             from: self.vault_account.to_account_info().clone(),
             to: self.taker_receive_token_account.to_account_info().clone(),
@@ -278,7 +284,8 @@ impl<'info> Exchange<'info> {
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> { // 読んだ
+    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        // 読んだ
         let cpi_accounts = CloseAccount {
             account: self.vault_account.to_account_info().clone(),
             destination: self.initializer.clone(), // initializerに権限を返却する

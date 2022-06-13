@@ -127,7 +127,6 @@ describe("anchor-escrow", () => {
     vault_authority_pda = _vault_authority_pda;
 
     await program.rpc.initialize(
-      vault_account_bump,
       new anchor.BN(initializerAmount),
       new anchor.BN(takerAmount),
       {
@@ -218,7 +217,6 @@ describe("anchor-escrow", () => {
     );
 
     await program.rpc.initialize(
-      vault_account_bump,
       new anchor.BN(initializerAmount),
       new anchor.BN(takerAmount),
       {
