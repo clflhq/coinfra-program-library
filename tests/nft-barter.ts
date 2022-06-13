@@ -132,6 +132,7 @@ describe("anchor-escrow", () => {
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
+          taker: takerMainAccount.publicKey,
           vaultAccount: vault_account_pda,
           mint: mintA.publicKey,
           initializerDepositTokenAccount: initializerTokenAccountA,
@@ -207,7 +208,7 @@ describe("anchor-escrow", () => {
     assert.ok(_takerTokenAccountB.amount.toNumber() == 0);
   });
 
-  it("Initialize escrow and cancel escrow", async () => {
+  it("Initialize escrow and cancel escrow by A", async () => {
     // Put back tokens into initializer token A account.
     await mintA.mintTo(
       initializerTokenAccountA,
@@ -222,6 +223,7 @@ describe("anchor-escrow", () => {
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
+          taker: takerMainAccount.publicKey,
           vaultAccount: vault_account_pda,
           mint: mintA.publicKey,
           initializerDepositTokenAccount: initializerTokenAccountA,
@@ -239,7 +241,7 @@ describe("anchor-escrow", () => {
     );
 
     // Cancel the escrow.
-    await program.rpc.cancel({
+    await program.rpc.cancelByInitializer({
       accounts: {
         initializer: initializerMainAccount.publicKey,
         initializerDepositTokenAccount: initializerTokenAccountA,
@@ -249,6 +251,62 @@ describe("anchor-escrow", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       },
       signers: [initializerMainAccount],
+    });
+
+    // Check the final owner should be the provider public key.
+    const _initializerTokenAccountA = await mintA.getAccountInfo(
+      initializerTokenAccountA
+    );
+    assert.ok(
+      _initializerTokenAccountA.owner.equals(initializerMainAccount.publicKey)
+    );
+
+    // Check all the funds are still there.
+    assert.ok(_initializerTokenAccountA.amount.toNumber() == initializerAmount);
+
+    // token AccountBのチェックを入れてみた
+    const _initializerTokenAccountB = await mintB.getAccountInfo(
+      initializerTokenAccountB
+    );
+    assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
+  });
+
+  it("Initialize escrow and cancel escrow by B", async () => {
+    await program.rpc.initialize(
+      new anchor.BN(initializerAmount),
+      new anchor.BN(takerAmount),
+      {
+        accounts: {
+          initializer: initializerMainAccount.publicKey,
+          taker: takerMainAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          mint: mintA.publicKey,
+          initializerDepositTokenAccount: initializerTokenAccountA,
+          initializerReceiveTokenAccount: initializerTokenAccountB,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, initializerMainAccount],
+      }
+    );
+
+    // Cancel the escrow.
+    await program.rpc.cancelByTaker({
+      accounts: {
+        initializer: initializerMainAccount.publicKey,
+        taker: takerMainAccount.publicKey,
+        initializerDepositTokenAccount: initializerTokenAccountA,
+        vaultAccount: vault_account_pda,
+        vaultAuthority: vault_authority_pda,
+        escrowAccount: escrowAccount.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [takerMainAccount],
     });
 
     // Check the final owner should be the provider public key.

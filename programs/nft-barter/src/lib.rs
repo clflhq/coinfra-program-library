@@ -36,6 +36,7 @@ pub mod nft_barter {
             .to_account_info()
             .key;
         ctx.accounts.escrow_account.initializer_amount = initializer_amount;
+        ctx.accounts.escrow_account.taker_key = *ctx.accounts.taker.key;
         ctx.accounts.escrow_account.taker_amount = taker_amount;
         ctx.accounts.escrow_account.bump = *ctx.bumps.get("vault_account").unwrap();
 
@@ -55,7 +56,28 @@ pub mod nft_barter {
         Ok(())
     }
 
-    pub fn cancel(ctx: Context<Cancel>) -> ProgramResult {
+    pub fn cancel_by_initializer(ctx: Context<CancelByInitializer>) -> ProgramResult {
+        let (_vault_authority, vault_authority_bump) =
+            Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
+        let authority_seeds = &[&ESCROW_PDA_SEED[..], &[vault_authority_bump]];
+
+        token::transfer(
+            ctx.accounts
+                .into_transfer_to_initializer_context()
+                .with_signer(&[&authority_seeds[..]]),
+            ctx.accounts.escrow_account.initializer_amount,
+        )?;
+
+        token::close_account(
+            ctx.accounts
+                .into_close_context()
+                .with_signer(&[&authority_seeds[..]]),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn cancel_by_taker(ctx: Context<CancelByTaker>) -> ProgramResult {
         let (_vault_authority, vault_authority_bump) =
             Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
         let authority_seeds = &[&ESCROW_PDA_SEED[..], &[vault_authority_bump]];
@@ -115,6 +137,9 @@ pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub initializer: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(mut)]
+    pub taker: AccountInfo<'info>,
     pub mint: Account<'info, Mint>,
     #[account(
         init,
@@ -141,7 +166,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Cancel<'info> {
+pub struct CancelByInitializer<'info> {
     // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
@@ -155,6 +180,31 @@ pub struct Cancel<'info> {
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
+        constraint = escrow_account.initializer_deposit_token_account == *initializer_deposit_token_account.to_account_info().key,
+        close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
+    )]
+    pub escrow_account: Box<Account<'info, EscrowAccount>>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    pub token_program: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CancelByTaker<'info> {
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(mut)]
+    pub initializer: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(mut, signer)]
+    pub taker: AccountInfo<'info>,
+    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.bump)]
+    pub vault_account: Account<'info, TokenAccount>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    pub vault_authority: AccountInfo<'info>,
+    #[account(mut)]
+    pub initializer_deposit_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = escrow_account.taker_key == *taker.key,
         constraint = escrow_account.initializer_deposit_token_account == *initializer_deposit_token_account.to_account_info().key,
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
@@ -202,6 +252,7 @@ pub struct EscrowAccount {
     pub initializer_deposit_token_account: Pubkey,
     pub initializer_receive_token_account: Pubkey,
     pub initializer_amount: u64,
+    pub taker_key: Pubkey,
     pub taker_amount: u64,
     pub bump: u8,
 }
@@ -231,7 +282,34 @@ impl<'info> Initialize<'info> {
     }
 }
 
-impl<'info> Cancel<'info> {
+impl<'info> CancelByInitializer<'info> {
+    fn into_transfer_to_initializer_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        // 読んだ
+        let cpi_accounts = Transfer {
+            from: self.vault_account.to_account_info().clone(),
+            to: self
+                .initializer_deposit_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.vault_authority.clone(),
+        };
+        CpiContext::new(self.token_program.clone(), cpi_accounts)
+    }
+
+    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        // 読んだがExchangeと同じなので共通化したいところ
+        let cpi_accounts = CloseAccount {
+            account: self.vault_account.to_account_info().clone(),
+            destination: self.initializer.clone(),
+            authority: self.vault_authority.clone(),
+        };
+        CpiContext::new(self.token_program.clone(), cpi_accounts)
+    }
+}
+
+impl<'info> CancelByTaker<'info> {
     fn into_transfer_to_initializer_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
