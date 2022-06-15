@@ -2,7 +2,13 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { NftBarter } from "../target/types/nft_barter";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
+import {
+  TOKEN_PROGRAM_ID,
+  setAuthority,
+  createMint,
+  mintTo,
+  getOrCreateAssociatedTokenAccount,
+} from "@solana/spl-token";
 import { assert } from "chai";
 
 describe("anchor-escrow", () => {
@@ -14,16 +20,25 @@ describe("anchor-escrow", () => {
 
   let mintA = null;
   let mintB = null;
+  let mintC = null;
+  let mintD = null;
+  let mintE = null;
+
   let initializerTokenAccountA = null;
   let initializerTokenAccountB = null;
+  let initializerTokenAccountC = null;
+  let initializerTokenAccountD = null;
+  let initializerTokenAccountE = null;
+
   let takerTokenAccountA = null;
   let takerTokenAccountB = null;
+  let takerTokenAccountC = null;
+  let takerTokenAccountD = null;
+  let takerTokenAccountE = null;
+
   let vault_account_pda = null;
   let vaultSolAccountPda = null;
   let vault_authority_pda = null;
-
-  const takerAmount = 1_000;
-  const initializerAmount = 500;
 
   const initializerStartSolAmount = 2_000_000_000;
   const takerStartSolAmount = 5_000_000_000;
@@ -31,13 +46,14 @@ describe("anchor-escrow", () => {
   const takerAdditionalSolAmount = 3_000_000_000; // lamport
 
   const escrowAccount = anchor.web3.Keypair.generate();
-  const vaultSolAccount = anchor.web3.Keypair.generate();
   const payer = anchor.web3.Keypair.generate();
   const mintAuthority = anchor.web3.Keypair.generate();
   const initializerMainAccount = anchor.web3.Keypair.generate();
   const takerMainAccount = anchor.web3.Keypair.generate();
 
   it("Initialize program state", async () => {
+    console.log("start airdrop");
+
     // Airdropping tokens to a payer.
     await provider.connection.confirmTransaction(
       await provider.connection.requestAirdrop(payer.publicKey, 10_000_000_000),
@@ -65,55 +81,194 @@ describe("anchor-escrow", () => {
       [payer]
     );
 
-    mintA = await Token.createMint(
+    console.log("start createMint");
+
+    mintA = await createMint(
       provider.connection,
       payer,
       mintAuthority.publicKey,
       null,
-      0,
-      TOKEN_PROGRAM_ID
+      0
     );
 
-    mintB = await Token.createMint(
+    mintB = await createMint(
       provider.connection,
       payer,
       mintAuthority.publicKey,
       null,
-      0,
-      TOKEN_PROGRAM_ID
+      0
     );
 
-    initializerTokenAccountA = await mintA.createAccount(
+    mintC = await createMint(
+      provider.connection,
+      payer,
+      mintAuthority.publicKey,
+      null,
+      0
+    );
+
+    mintD = await createMint(
+      provider.connection,
+      payer,
+      mintAuthority.publicKey,
+      null,
+      0
+    );
+
+    mintE = await createMint(
+      provider.connection,
+      payer,
+      mintAuthority.publicKey,
+      null,
+      0
+    );
+
+    console.log("start getOrCreateAssociatedTokenAccount");
+
+    // mintA mintBはinitializerが保有している
+    initializerTokenAccountA = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      initializerMainAccount,
+      mintA,
       initializerMainAccount.publicKey
     );
-    takerTokenAccountA = await mintA.createAccount(takerMainAccount.publicKey);
-
-    initializerTokenAccountB = await mintB.createAccount(
+    initializerTokenAccountB = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      initializerMainAccount,
+      mintB,
       initializerMainAccount.publicKey
     );
-    takerTokenAccountB = await mintB.createAccount(takerMainAccount.publicKey);
 
-    await mintA.mintTo(
-      initializerTokenAccountA,
-      mintAuthority.publicKey,
-      [mintAuthority],
-      initializerAmount
+    // mintC mintD mintEはtakerが保有している
+    takerTokenAccountC = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      takerMainAccount,
+      mintC,
+      takerMainAccount.publicKey
+    );
+    takerTokenAccountD = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      takerMainAccount,
+      mintD,
+      takerMainAccount.publicKey
+    );
+    takerTokenAccountE = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      takerMainAccount,
+      mintE,
+      takerMainAccount.publicKey
     );
 
-    await mintB.mintTo(
-      takerTokenAccountB,
-      mintAuthority.publicKey,
-      [mintAuthority],
-      takerAmount
+    // 持っていないNFTのtoken accountはrust側で確認して作る
+
+    console.log("start mintTo");
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintA, // Mint for the account
+      initializerTokenAccountA.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
     );
+    console.log("start mintTo1");
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintA, // Account
+      mintAuthority, // Current authority
+      0, // Authority type: "0" represents Mint Tokens
+      null // Setting the new Authority to null
+    );
+    console.log("start mintTo2");
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintB, // Mint for the account
+      initializerTokenAccountB.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintB, // Account
+      mintAuthority, // Current authority
+      0, // Authority type: "0" represents Mint Tokens
+      null // Setting the new Authority to null
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintC, // Mint for the account
+      takerTokenAccountC.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintC, // Account
+      mintAuthority, // Current authority
+      0, // Authority type: "0" represents Mint Tokens
+      null // Setting the new Authority to null
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintD, // Mint for the account
+      takerTokenAccountD.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintD, // Account
+      mintAuthority, // Current authority
+      0, // Authority type: "0" represents Mint Tokens
+      null // Setting the new Authority to null
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintE, // Mint for the account
+      takerTokenAccountE.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintE, // Account
+      mintAuthority, // Current authority
+      0, // Authority type: "0" represents Mint Tokens
+      null // Setting the new Authority to null
+    );
+
+    console.log("start assertion");
 
     let _initializerTokenAccountA = await mintA.getAccountInfo(
       initializerTokenAccountA
     );
-    let _takerTokenAccountB = await mintB.getAccountInfo(takerTokenAccountB);
+    assert.ok(_initializerTokenAccountA.amount.toNumber() == 1);
 
-    assert.ok(_initializerTokenAccountA.amount.toNumber() == initializerAmount);
-    assert.ok(_takerTokenAccountB.amount.toNumber() == takerAmount);
+    let _initializerTokenAccountB = await mintB.getAccountInfo(
+      initializerTokenAccountB
+    );
+    assert.ok(_initializerTokenAccountB.amount.toNumber() == 1);
+
+    let _takerTokenAccountC = await mintC.getAccountInfo(takerTokenAccountC);
+    assert.ok(_takerTokenAccountC.amount.toNumber() == 1);
+
+    let _takerTokenAccountD = await mintC.getAccountInfo(takerTokenAccountD);
+    assert.ok(_takerTokenAccountD.amount.toNumber() == 1);
+
+    let _takerTokenAccountE = await mintC.getAccountInfo(takerTokenAccountE);
+    assert.ok(_takerTokenAccountE.amount.toNumber() == 1);
   });
 
   it("Initialize escrow", async () => {

@@ -140,6 +140,7 @@ pub mod nft_barter {
         )?;
 
         // initializerがsolをget
+        // walletからの引き出しなら以下のようにやる
         // taker mutでOK　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.taker.key(),
@@ -164,6 +165,7 @@ pub mod nft_barter {
         )?;
 
         // takerがsolをget
+        // PDAからの引き出しなら以下のようにやる
         // 　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction changed the balance of a read-only account
         **ctx
             .accounts
