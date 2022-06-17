@@ -1,6 +1,12 @@
+use crate::errors::MyError;
+use crate::utils::assert_is_ata;
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Mint, SetAuthority, TokenAccount, Transfer};
 use spl_token::instruction::AuthorityType;
+
+pub mod errors;
+pub mod utils;
 
 declare_id!("FRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2");
 
@@ -9,274 +15,455 @@ Controller
 */
 #[program]
 pub mod nft_barter {
-    use anchor_lang::solana_program::entrypoint::ProgramResult;
+    use anchor_lang::solana_program::program::invoke;
 
     use super::*;
 
-    const ESCROW_PDA_SEED: &[u8] = b"escrow";
+    const VAULT_AUTHORITY_PDA_SEED: &[u8] = b"vault-authority";
 
-    pub fn initialize(
-        ctx: Context<Initialize>,
-        initializer_amount: u64,
-        initializer_additional_sol_amount: u64,
-        taker_amount: u64,
-        taker_additional_sol_amount: u64,
-    ) -> ProgramResult {
+    pub fn initialize2<'info>(
+        ctx: Context<'_, '_, '_, 'info, InitializeForTest<'info>>,
+        initializer_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
+        taker_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
+        initializer_nft_amount: u8,
+        taker_nft_amount: u8,
+        vault_account_bumps: Vec<u8>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    // pub fn initialize(
+    //     ctx: Context<Initialize>,だと以下エラー
+    // lifetime mismatch these two types are declared with different lifetimes...
+    pub fn initialize<'info>(
+        ctx: Context<'_, '_, '_, 'info, Initialize<'info>>,
+        initializer_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
+        taker_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
+        initializer_nft_amount: u8,
+        taker_nft_amount: u8,
+        vault_account_bumps: Vec<u8>,
+    ) -> Result<()> {
         msg!("start initialize");
+
+        /* ok*/
+        require_neq!(
+            initializer_additional_sol_amount as usize + initializer_nft_amount as usize,
+            0,
+            MyError::NotProvidedInitializerAssets
+        );
+        require_neq!(
+            taker_additional_sol_amount as usize + taker_nft_amount as usize,
+            0,
+            MyError::NotProvidedTakerAssets
+        );
+
+        // NFTの数の検証
+        let initializer_nft_amount_count = initializer_nft_amount as usize;
+        let remaining_accounts_count =
+            initializer_nft_amount_count * 2 as usize + taker_nft_amount as usize; // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
+        require_eq!(
+            ctx.remaining_accounts.len(),
+            remaining_accounts_count,
+            MyError::NftAmountMismatch
+        );
+
+        // vault_account_bumpsの数の検証
+        require_eq!(
+            vault_account_bumps.len(),
+            initializer_nft_amount_count,
+            MyError::VaultAccountBumpsMismatch
+        );
+
+        // Check, that provided destination is associated token account
+        // ownerがtoken programかのチェック
+        // remaining_accountsはnot deserialized or validatedなので事前チェックが必要
+        // https://github.com/c0wjay/mixture_machine/blob/c0096cc66eb1cec581925ef3c2f4c25be0a1f209/programs/mixture_machine/src/utils.rs#L79-L89　がそのままいけそう
+        /*
+                if *treasury_holder.owner != spl_token::id() {
+                    return Err(ProgramError::InvalidArgument.into());
+                }
+        */
+
+        /* ok */
+        let (vault_authority, _vault_authority_bump) = Pubkey::find_program_address(
+            &[
+                VAULT_AUTHORITY_PDA_SEED,
+                ctx.accounts.initializer.key().as_ref(),
+                ctx.accounts.taker.key().as_ref(),
+            ],
+            ctx.program_id,
+        );
+
+        // 偶数番にtoken account 奇数番にvault account
+        for index in 0..initializer_nft_amount_count {
+            // Token Accountの検証
+            let token_account = &ctx.remaining_accounts[index * 2];
+            let account = assert_is_ata(token_account, ctx.accounts.initializer.key)?;
+
+            // NFTをちゃんと持っていることの検証
+            require_eq!(account.amount, 1, MyError::NotFoundNft);
+
+            // bumpからPDAの生成
+            let vault_account_bump = vault_account_bumps[index];
+            let vault_pda = Pubkey::create_program_address(
+                &[
+                    b"vault-account",
+                    token_account.key().as_ref(),
+                    &[vault_account_bump],
+                ],
+                &ctx.program_id,
+            )
+            .unwrap();
+
+            // 渡されたPDAの検証
+            let vault_account = &ctx.remaining_accounts[index * 2 + 1];
+            require_keys_eq!(
+                vault_pda,
+                vault_account.key(),
+                MyError::PdaPublicKeyMismatch
+            );
+
+            msg!("vault_account.owner {}", vault_account.owner);
+            msg!(
+                "vault_sol_account.owner {}",
+                *ctx.accounts.vault_sol_account.to_account_info().owner
+            );
+            msg!(
+                "escrow_account.owner {}",
+                *ctx.accounts.escrow_account.to_account_info().owner
+            );
+            /*
+            msg!(
+                "vault_account.owner {}",
+                *ctx.accounts.vault_account.to_account_info().owner
+            );*/
+
+            // set_authorityをしないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account?
+            // classでdeserializeするときは、token::authority = initializerを指定しているので、initializerがownerになっている　今回はPDAをわたしているだけなので、signが必要
+            // let authority_seeds = &[&b"vault-account", &[vault_account_bump]];
+            // let authority_seeds = [b"vault-account", &[vault_account_bump]]; // , ah_key.as_ref()
+
+            /*signer例　動かず
+            .with_signer(&[&[
+                        b"vault-account",
+                        token_account.key().as_ref(),
+                        &[vault_account_bump],
+                    ]])
+            */
+
+            /* 生のSolanaでやっても駄目
+            let owner_change_ix = spl_token::instruction::set_authority(
+                ctx.accounts.token_program.key,
+                vault_account.key,
+                Some(&vault_authority),
+                spl_token::instruction::AuthorityType::AccountOwner,
+                ctx.accounts.system_program.key,
+                &[&ctx.accounts.system_program.key],
+            )?;
+
+            msg!("Calling the token program to transfer token account ownership...");
+            invoke(
+                &owner_change_ix,
+                &[
+                    vault_account.clone(),
+                    ctx.accounts.initializer.clone(),
+                    ctx.accounts.token_program.clone(),
+                ],
+            )?;
+            */
+            /*
+            token::set_authority(
+                ctx.accounts.into_set_authority_context(vault_account),
+                AuthorityType::AccountOwner,
+                Some(vault_authority),
+            )?;*/
+
+            // NFTをinitializerに戻す
+
+            /*
+            token::transfer(
+                ctx.accounts.into_transfer_to_pda_context(
+                    &ctx.remaining_accounts[index * 2],
+                    &ctx.remaining_accounts[index * 2 + 1],
+                ),
+                1,
+            )?;*/
+        }
+        /*
+        for index in initializer_nft_amount_count * 2..remaining_accounts_count {
+            // Token Accountの検証
+            let account = assert_is_ata(&ctx.remaining_accounts[index], ctx.accounts.taker.key)?;
+
+            // NFTをちゃんと持っていることの検証
+            require_eq!(account.amount, 1, MyError::NotFoundNft);
+        }
+
+        /* ok*/
         ctx.accounts.escrow_account.initializer_key = *ctx.accounts.initializer.key;
-        ctx.accounts
-            .escrow_account
-            .initializer_deposit_token_account = *ctx
-            .accounts
-            .initializer_deposit_token_account
-            .to_account_info()
-            .key;
-        ctx.accounts
-            .escrow_account
-            .initializer_receive_token_account = *ctx
-            .accounts
-            .initializer_receive_token_account
-            .to_account_info()
-            .key;
-        ctx.accounts.escrow_account.initializer_amount = initializer_amount;
+        ctx.accounts.escrow_account.initializer_nft_amount = initializer_nft_amount;
         ctx.accounts
             .escrow_account
             .initializer_additional_sol_amount = initializer_additional_sol_amount;
+
         ctx.accounts.escrow_account.taker_key = *ctx.accounts.taker.key;
-        ctx.accounts.escrow_account.taker_amount = taker_amount;
+        ctx.accounts.escrow_account.taker_nft_amount = taker_nft_amount;
         ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
-        ctx.accounts.escrow_account.vault_account_bump = *ctx.bumps.get("vault_account").unwrap();
+
+        // ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
+
         ctx.accounts.vault_sol_account.bump = *ctx.bumps.get("vault_sol_account").unwrap();
 
-        /*
         msg!(
             "ctx.accounts.escrow_account.vault_account_bump {}",
             ctx.accounts.escrow_account.vault_account_bump
         );
+        /*
         msg!(
             "ctx.accounts.vault_sol_account.bump {}",
             ctx.accounts.vault_sol_account.bump
         );*/
 
-        let (vault_authority, _vault_authority_bump) =
-            Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
-
-        // set_authorityをしないと　assert.ok(_vault.owner.equals(vault_authority_pda));　がパスしない
+        // set_authorityをしないと　ts側のassert.ok(_vault.owner.equals(vault_authority_pda));　がパスしない
         token::set_authority(
             ctx.accounts.into_set_authority_context(),
             AuthorityType::AccountOwner,
             Some(vault_authority),
-        )?;
+        )?;*/
 
         // NFTの移動
-        token::transfer(
-            ctx.accounts.into_transfer_to_pda_context(),
-            ctx.accounts.escrow_account.initializer_amount,
-        )?;
+        for index in 0..initializer_nft_amount_count {
+            /* 直書きしても駄目 forの外に出しても駄目
+            let referer2_usdc = Account::<TokenAccount>::try_from(&ctx.remaining_accounts[index])?;
+            let cpi_accounts = Transfer {
+                from: referer2_usdc.to_account_info().clone(),
+                to: ctx.accounts.vault_account.to_account_info().clone(),
+                authority: ctx.accounts.initializer.clone(),
+            };
+            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.clone(), cpi_accounts);
+            token::transfer(cpi_ctx, 1)?;*/
+        }
 
-        // Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: invalid program argument
         /*
-        token::set_authority(
-            ctx.accounts.into_set_authority_context2(),
-            AuthorityType::AccountOwner,
-            Some(vault_authority),
-        )?;*/
-        /*
-        token::transfer(
-            ctx.accounts.into_transfer_to_pda_context2(),
-            initializer_additional_sol_amount,
-        )?; */
+                // Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: invalid program argument
+                /* ok*/
+                token::set_authority(
+                    ctx.accounts
+                        .into_add_authority_to_vault_sol_account_context(),
+                    AuthorityType::AccountOwner,
+                    Some(vault_authority),
+                )?;
 
-        let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.initializer.key(),
-            &ctx.accounts.vault_sol_account.key(), // sends to event host pda
-            initializer_additional_sol_amount,
-        );
+                /*  OK*/
+                let ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.initializer.key(),
+                    &ctx.accounts.vault_sol_account.key(), // sends to event host pda
+                    initializer_additional_sol_amount,
+                );
 
-        // account_infosにctx.accounts.system_program.to_account_info()はなくてもいい
-        // invoke_signedの必要もなし だが、account_infoはいずれにしても必須
-        // ctx.accounts.initializer.clone() ctx.accounts.vault_sol_account.clone()は必須 ないとAn account required by the instruction is missing
-        anchor_lang::solana_program::program::invoke(
-            &ix,
-            &[
-                ctx.accounts.initializer.clone(),
-                ctx.accounts.vault_sol_account.to_account_info(),
-            ],
-        )?;
+                // account_infosにctx.accounts.system_program.to_account_info()はなくてもいい
+                // invoke_signedの必要もなし だが、account_infoはいずれにしても必須
+                // ctx.accounts.initializer.clone() ctx.accounts.vault_sol_account.clone()は必須 ないとAn account required by the instruction is missing
+                /*  OK*/
+                anchor_lang::solana_program::program::invoke(
+                    &ix,
+                    &[
+                        ctx.accounts.initializer.clone(),
+                        ctx.accounts.vault_sol_account.to_account_info(),
+                    ],
+                )?;
 
-        // 以下はPDAのときだけしか使えない
-        /*
-                        **ctx.accounts.initializer.try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
-                        **ctx.accounts.vault_sol_account.try_borrow_mut_lamports()? +=
-                            initializer_additional_sol_amount;
+                // 以下はPDAのときだけしか使えない
+                /*
+                                **ctx.accounts.initializer.try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
+                                **ctx.accounts.vault_sol_account.try_borrow_mut_lamports()? +=
+                                    initializer_additional_sol_amount;
+                */
+                /*
+                msg!(
+                    "vault_sol_account {}",
+                    &ctx.accounts.vault_sol_account.key()
+                );
+
+                msg!(
+                    "&ctx.accounts.vault_account.to_account_info().owner {}",
+                    &ctx.accounts.vault_account.to_account_info().owner
+                );
+                msg!(
+                    "&ctx.accounts.vault_sol_account.to_account_info().owner {}",
+                    &ctx.accounts.vault_sol_account.to_account_info().owner
+                );*/
+
+                msg!("end initialize");
         */
-        msg!(
-            "vault_sol_account {}",
-            &ctx.accounts.vault_sol_account.key()
-        );
-        msg!(
-            "&ctx.accounts.vault_account.to_account_info().owner {}",
-            &ctx.accounts.vault_account.to_account_info().owner
-        );
-        msg!(
-            "&ctx.accounts.vault_sol_account.to_account_info().owner {}",
-            &ctx.accounts.vault_sol_account.to_account_info().owner
-        );
-
-        msg!("end initialize");
         Ok(())
     }
 
-    pub fn exchange(ctx: Context<Exchange>) -> ProgramResult {
-        msg!("start exchange");
+    /*
+            pub fn exchange(ctx: Context<Exchange>) -> Result<()> {
+                msg!("start exchange");
 
-        let (_vault_authority, vault_authority_bump) =
-            Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
-        let authority_seeds = &[&ESCROW_PDA_SEED[..], &[vault_authority_bump]];
-        // initializerがtokenをget
-        token::transfer(
-            ctx.accounts.into_transfer_to_initializer_context(),
-            ctx.accounts.escrow_account.taker_amount,
-        )?;
+                let (_vault_authority, vault_authority_bump) =
+                    Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
+                let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
+                // initializerがtokenをget
+                token::transfer(ctx.accounts.into_transfer_to_initializer_context(), 1)?;
 
-        // initializerがsolをget
-        // walletからの引き出しなら以下のようにやる
-        // taker mutでOK　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
-        let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.taker.key(),
-            &ctx.accounts.initializer.key(), // sends to event host pda
-            ctx.accounts.escrow_account.taker_additional_sol_amount,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &ix,
-            &[
-                ctx.accounts.taker.clone(),
-                ctx.accounts.initializer.clone(),
-                // ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
+                // initializerがsolをget
+                // walletからの引き出しなら以下のようにやる
+                // taker mutでOK　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
+                let ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.taker.key(),
+                    &ctx.accounts.initializer.key(), // sends to event host pda
+                    ctx.accounts.escrow_account.taker_additional_sol_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &ix,
+                    &[
+                        ctx.accounts.taker.clone(),
+                        ctx.accounts.initializer.clone(),
+                        // ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
 
-        // takerがtokenをget
-        token::transfer(
-            ctx.accounts
-                .into_transfer_to_taker_context()
-                .with_signer(&[&authority_seeds[..]]),
-            ctx.accounts.escrow_account.initializer_amount,
-        )?;
+                // takerがtokenをget
+                token::transfer(
+                    ctx.accounts
+                        .into_transfer_to_taker_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                    1,
+                )?;
 
-        // takerがsolをget
-        // PDAからの引き出しなら以下のようにやる
-        // 　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction changed the balance of a read-only account
-        **ctx
-            .accounts
-            .vault_sol_account
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
-        **ctx.accounts.taker.try_borrow_mut_lamports()? += ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
+                // takerがsolをget
+                // PDAからの引き出しなら以下のようにやる
+                // 　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction changed the balance of a read-only account
+                **ctx
+                    .accounts
+                    .vault_sol_account
+                    .to_account_info()
+                    .try_borrow_mut_lamports()? -= ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
+                **ctx.accounts.taker.try_borrow_mut_lamports()? += ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
 
-        // token accountのclose
-        token::close_account(
-            ctx.accounts
-                .into_close_context()
-                .with_signer(&[&authority_seeds[..]]),
-        )?;
+                // token accountのclose
+                token::close_account(
+                    ctx.accounts
+                        .into_close_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                )?;
 
-        msg!("end exchange");
+        //　vault_sol_accountから齋藤に送る
+        // programのownerと齋藤の一致を確認する
+        // metaplexのwithdrawが参考になるかも
 
-        Ok(())
-    }
+        // vault_sol_accountをcloseする
+                msg!("end exchange");
 
-    pub fn cancel_by_initializer(ctx: Context<CancelByInitializer>) -> ProgramResult {
-        msg!("start cancel_by_initializer");
+                Ok(())
+            }
 
-        let (_vault_authority, vault_authority_bump) =
-            Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
-        let authority_seeds = &[&ESCROW_PDA_SEED[..], &[vault_authority_bump]];
+            pub fn cancel_by_initializer(ctx: Context<CancelByInitializer>) -> Result<()> {
+                msg!("start cancel_by_initializer");
 
-        // NFTをinitializerに戻す
-        token::transfer(
-            ctx.accounts
-                .into_transfer_to_initializer_context()
-                .with_signer(&[&authority_seeds[..]]),
-            ctx.accounts.escrow_account.initializer_amount,
-        )?;
+                let (_vault_authority, vault_authority_bump) =
+                    Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
+                let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
 
-        // 追加のsolをinitializerに戻す
-        **ctx
-            .accounts
-            .vault_sol_account
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
-        **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
+                // NFTをinitializerに戻す
+                token::transfer(
+                    ctx.accounts
+                        .into_transfer_to_initializer_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                    1,
+                )?;
 
-        token::close_account(
-            ctx.accounts
-                .into_close_context()
-                .with_signer(&[&authority_seeds[..]]),
-        )?;
+                // 追加のsolをinitializerに戻す
+                **ctx
+                    .accounts
+                    .vault_sol_account
+                    .to_account_info()
+                    .try_borrow_mut_lamports()? -= ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
+                **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
 
-        msg!("end cancel_by_initializer");
-        Ok(())
-    }
+                // NFTのtoken accountをcloseする
+                token::close_account(
+                    ctx.accounts
+                        .into_close_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                )?;
 
-    pub fn cancel_by_taker(ctx: Context<CancelByTaker>) -> ProgramResult {
-        msg!("start cancel_by_taker");
+                // vault_sol_accountをcloseする
 
-        let (_vault_authority, vault_authority_bump) =
-            Pubkey::find_program_address(&[ESCROW_PDA_SEED], ctx.program_id);
-        let authority_seeds = &[&ESCROW_PDA_SEED[..], &[vault_authority_bump]];
+                msg!("end cancel_by_initializer");
+                Ok(())
+            }
 
-        // NFTをinitializerに戻す
-        token::transfer(
-            ctx.accounts
-                .into_transfer_to_initializer_context()
-                .with_signer(&[&authority_seeds[..]]),
-            ctx.accounts.escrow_account.initializer_amount,
-        )?;
+            pub fn cancel_by_taker(ctx: Context<CancelByTaker>) -> Result<()> {
+                msg!("start cancel_by_taker");
 
-        // 追加のsolをinitializerに戻す
-        **ctx
-            .accounts
-            .vault_sol_account
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
-        **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
+                let (_vault_authority, vault_authority_bump) =
+                    Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
+                let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
 
-        token::close_account(
-            ctx.accounts
-                .into_close_context()
-                .with_signer(&[&authority_seeds[..]]),
-        )?;
+                // NFTをinitializerに戻す
+                token::transfer(
+                    ctx.accounts
+                        .into_transfer_to_initializer_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                    1,
+                )?;
 
-        msg!("end cancel_by_taker");
+                // 追加のsolをinitializerに戻す
+                **ctx
+                    .accounts
+                    .vault_sol_account
+                    .to_account_info()
+                    .try_borrow_mut_lamports()? -= ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
+                **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
+                    .accounts
+                    .escrow_account
+                    .initializer_additional_sol_amount;
 
-        Ok(())
-    }
+    // NFTのtoken accountをcloseする
+                token::close_account(
+                    ctx.accounts
+                        .into_close_context()
+                        .with_signer(&[&authority_seeds[..]]),
+                )?;
+
+                // vault_sol_accountをcloseする
+
+                msg!("end cancel_by_taker");
+
+                Ok(())
+            }
+            */
 }
 
 /*
 Model
 */
 #[derive(Accounts)]
-#[instruction(initializer_amount: u64, initializer_additional_sol_amount: u64, taker_amount: u64, taker_additional_sol_amount: u64)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8)]
+pub struct InitializeForTest<'info> {
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8)]
 pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
@@ -284,35 +471,33 @@ pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut)]
     pub taker: AccountInfo<'info>,
-    pub mint: Account<'info, Mint>,
+    // pub mint: Account<'info, Mint>,
+    /*
     #[account(
         init,
-        seeds = [b"token-seed".as_ref()],
+        seeds = [b"vault-account-test".as_ref()],
         bump,
         payer = initializer,
         token::mint = mint,
         token::authority = initializer,
     )]
-    pub vault_account: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = initializer_deposit_token_account.amount >= initializer_amount
-    )]
-    pub initializer_deposit_token_account: Account<'info, TokenAccount>,
-    pub initializer_receive_token_account: Account<'info, TokenAccount>,
+    pub vault_account: Account<'info, TokenAccount>,*/
     // ここをmutにすると、Error: 3012: The program expected this account to be already initialized
     #[account(
         init,
-        seeds = [b"vault-sol-account".as_ref()], // initializer.key().as_ref()を加えるとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account
+        // initializer.key().as_ref()を加えるとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account
+        // これはts側でseedをちゃんと設定してないからと思われる
+        seeds = [b"vault-sol-account", initializer.key().as_ref(), taker.key().as_ref()], // b"vault-sol-account"のあとに.as_ref()をつけるとError: 3003: Failed to deserialize the account?　ここではなくEscrowAccountのbumps
         bump,
         payer = initializer,
         space = 100, // spaceが足りないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Program failed to complete
         constraint = initializer.lamports() >= initializer_additional_sol_amount,
         constraint = taker.lamports() >= taker_additional_sol_amount,
     )]
-    pub vault_sol_account: Account<'info, VaultSolAccount>, // 手数料と追加のsolを入れる箱 ここBoxにしてもError: 3007: The given account is owned by a different program than expected
+    pub vault_sol_account: Account<'info, VaultSolAccount>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2　手数料と追加のsolを入れる箱 yawwwでも取引ごとに作られている　ここBoxにしてもError: 3007: The given account is owned by a different program than expected
+
     #[account(zero)]
-    pub escrow_account: Box<Account<'info, EscrowAccount>>,
+    pub escrow_account: Box<Account<'info, EscrowAccount>>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     /// CHECK: This is not dangerous because we don't read or write from this account
@@ -337,15 +522,13 @@ pub struct Exchange<'info> {
     pub initializer: AccountInfo<'info>,
     #[account(
         mut,
-        constraint = escrow_account.taker_amount <= taker_deposit_token_account.amount,
-        constraint = escrow_account.initializer_deposit_token_account == *initializer_deposit_token_account.to_account_info().key,
-        constraint = escrow_account.initializer_receive_token_account == *initializer_receive_token_account.to_account_info().key,
         constraint = escrow_account.initializer_key == *initializer.key,
+        constraint = escrow_account.taker_key == *taker.key,
         close = initializer // 関係なし Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
     // close = initializerを加えるとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
-    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.vault_account_bump)]
+    #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
     pub vault_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
@@ -353,7 +536,7 @@ pub struct Exchange<'info> {
     pub token_program: AccountInfo<'info>,
     // close = initializerをいれると残高がずれる
     /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, seeds = [b"vault-sol-account".as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
+    #[account(mut, seeds = [b"vault-sol-account".as_ref(), initializer.key().as_ref(), taker.key().as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
     pub vault_sol_account: Box<Account<'info, VaultSolAccount>>, // BoxにしてもError: 3012: The program expected this account to be already initialized
     pub system_program: Program<'info, System>,
 }
@@ -364,7 +547,7 @@ pub struct CancelByInitializer<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub initializer: AccountInfo<'info>,
-    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.vault_account_bump)]
+    #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
     pub vault_account: Account<'info, TokenAccount>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
@@ -375,7 +558,6 @@ pub struct CancelByInitializer<'info> {
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
-        constraint = escrow_account.initializer_deposit_token_account == *initializer_deposit_token_account.to_account_info().key,
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
@@ -391,7 +573,7 @@ pub struct CancelByTaker<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub taker: AccountInfo<'info>,
-    #[account(mut, seeds = [b"token-seed".as_ref()], bump = escrow_account.vault_account_bump)]
+    #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
     pub vault_account: Account<'info, TokenAccount>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
@@ -401,8 +583,8 @@ pub struct CancelByTaker<'info> {
     pub vault_sol_account: Account<'info, TokenAccount>,
     #[account(
         mut,
+        constraint = escrow_account.initializer_key == *initializer.key,
         constraint = escrow_account.taker_key == *taker.key,
-        constraint = escrow_account.initializer_deposit_token_account == *initializer_deposit_token_account.to_account_info().key,
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
@@ -413,15 +595,18 @@ pub struct CancelByTaker<'info> {
 #[account]
 pub struct EscrowAccount {
     pub initializer_key: Pubkey,
-    pub initializer_deposit_token_account: Pubkey,
-    pub initializer_receive_token_account: Pubkey,
-    pub initializer_amount: u64,
+    //pub initializer_deposit_token_account: Pubkey,
+    //pub initializer_receive_token_account: Pubkey,
+    //pub initializer_amount: u64,
+    pub initializer_nft_amount: u8,
     pub initializer_additional_sol_amount: u64,
     pub taker_key: Pubkey,
-    pub taker_amount: u64,
+    // pub taker_amount: u64,
+    pub taker_nft_amount: u8,
     pub taker_additional_sol_amount: u64,
     pub vault_account_bump: u8,
     pub vault_sol_account_bump: u8,
+    // pub vault_account_bumps: Vec<u8>,
 }
 
 #[account]
@@ -434,27 +619,34 @@ pub struct VaultSolAccount {
 Util
 */
 impl<'info> Initialize<'info> {
-    fn into_transfer_to_pda_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+    /* ok*/
+    fn into_transfer_to_pda_context(
+        &self,
+        initializer_nft_token_account: &AccountInfo<'info>,
+        vault_account: &AccountInfo<'info>,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
         let cpi_accounts = Transfer {
-            from: self
-                .initializer_deposit_token_account
-                .to_account_info()
-                .clone(),
-            to: self.vault_account.to_account_info().clone(),
+            from: initializer_nft_token_account.clone(),
+            to: vault_account.clone(),
             authority: self.initializer.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn into_set_authority_context(&self) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
+    fn into_set_authority_context(
+        &self,
+        vault_account: &AccountInfo<'info>,
+    ) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
         let cpi_accounts = SetAuthority {
-            account_or_mint: self.vault_account.to_account_info().clone(),
-            current_authority: self.initializer.clone(),
+            account_or_mint: vault_account.clone(),
+            current_authority: self.system_program.to_account_info().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
 
-    fn into_set_authority_context2(&self) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
+    fn into_add_authority_to_vault_sol_account_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
         let cpi_accounts = SetAuthority {
             account_or_mint: self.vault_sol_account.to_account_info().clone(),
             current_authority: self.initializer.clone(),

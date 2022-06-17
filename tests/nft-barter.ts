@@ -8,6 +8,7 @@ import {
   createMint,
   mintTo,
   getOrCreateAssociatedTokenAccount,
+  getAccount,
 } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -36,9 +37,19 @@ describe("anchor-escrow", () => {
   let takerTokenAccountD = null;
   let takerTokenAccountE = null;
 
-  let vault_account_pda = null;
-  let vaultSolAccountPda = null;
-  let vault_authority_pda = null;
+  let vaultAccountPda: anchor.web3.PublicKey = null; // テスト用　使っていない
+  let vaultAccountBump: number = null;
+
+  let vaultAccountPdaA: anchor.web3.PublicKey = null; // initializerがmintAを預ける用のvault
+  let vaultAccountBumpA: number = null;
+  let vaultAccountPdaB: anchor.web3.PublicKey = null; // initializerがmintBを預ける用のvault
+  let vaultAccountBumpB: number = null;
+
+  let vaultSolAccountPda: anchor.web3.PublicKey = null;
+  let vaultSolAccountBump: number = null;
+
+  let vaultAuthorityPda: anchor.web3.PublicKey = null;
+  let vaultAuthorityBump: number = null;
 
   const initializerStartSolAmount = 2_000_000_000;
   const takerStartSolAmount = 5_000_000_000;
@@ -171,7 +182,6 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    console.log("start mintTo1");
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -180,7 +190,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
-    console.log("start mintTo2");
+
     await mintTo(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -250,62 +260,201 @@ describe("anchor-escrow", () => {
     );
 
     console.log("start assertion");
+    console.log(initializerTokenAccountA);
+    console.log(initializerTokenAccountA.amount);
 
-    let _initializerTokenAccountA = await mintA.getAccountInfo(
-      initializerTokenAccountA
+    // 以下でNFT数を検証したほうがよさそう？
+    // const tokens = await connection.getParsedTokenAccountsByOwner(owner, {
+    //  programId: TOKEN_PROGRAM_ID,
+    // });
+    let _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
     );
-    assert.ok(_initializerTokenAccountA.amount.toNumber() == 1);
 
-    let _initializerTokenAccountB = await mintB.getAccountInfo(
-      initializerTokenAccountB
+    console.log(_initializerTokenAccountA);
+    console.log(Number(_initializerTokenAccountA.amount));
+    assert.ok(Number(_initializerTokenAccountA.amount) == 1);
+
+    let _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
     );
-    assert.ok(_initializerTokenAccountB.amount.toNumber() == 1);
+    assert.ok(Number(_initializerTokenAccountB.amount) == 1);
 
-    let _takerTokenAccountC = await mintC.getAccountInfo(takerTokenAccountC);
-    assert.ok(_takerTokenAccountC.amount.toNumber() == 1);
+    let _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) == 1);
 
-    let _takerTokenAccountD = await mintC.getAccountInfo(takerTokenAccountD);
-    assert.ok(_takerTokenAccountD.amount.toNumber() == 1);
+    let _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) == 1);
 
-    let _takerTokenAccountE = await mintC.getAccountInfo(takerTokenAccountE);
-    assert.ok(_takerTokenAccountE.amount.toNumber() == 1);
+    let _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) == 1);
+
+    // へんなaddressをtoken account addressでわたしたときの異常系チェック
   });
 
   it("Initialize escrow", async () => {
-    const [_vault_account_pda, _vault_account_bump] =
+    console.log("start creating PDAs");
+
+    const [_vaultAccountPda, _vaultAccountBump] =
       await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("token-seed"))],
+        [Buffer.from(anchor.utils.bytes.utf8.encode("vault-account-test"))],
         program.programId
       );
-    vault_account_pda = _vault_account_pda;
+    vaultAccountPda = _vaultAccountPda;
+    vaultAccountBump = _vaultAccountBump;
+
+    const [_vaultAccountPdaA, _vaultAccountBumpA] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountA.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaA = _vaultAccountPdaA;
+    vaultAccountBumpA = _vaultAccountBumpA;
+    console.log("initializerTokenAccountA", initializerTokenAccountA);
+    console.log("vaultAccountPdaA", vaultAccountPdaA);
+    console.log("vaultAccountBumpA", vaultAccountBumpA);
+
+    /*
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      vaultAccountPdaA, // Account
+      anchor.web3.SystemProgram.programId, // Current authority
+      2, // Authority type: "2" represents Account Owner
+      initializerMainAccount.publicKey // Setting the new Authority to null
+    );
+    */
+
+    // 以下だとデータ取れない
+    // let _vault = await provider.connection.getAccountInfo(vaultAccountPdaA);
+    // console.log("_vault", _vault);
+
+    const [_vaultAccountPdaB, _vaultAccountBumpB] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountB.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaB = _vaultAccountPdaB;
+    vaultAccountBumpB = _vaultAccountBumpB;
+    console.log("initializerTokenAccountB", initializerTokenAccountB);
+    console.log("vaultAccountPdaB", vaultAccountPdaB);
+    console.log("vaultAccountBumpB", vaultAccountBumpB);
+
+    /*
+    await setAuthority(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      vaultAccountPdaB, // Account
+      anchor.web3.SystemProgram.programId, // Current authority
+      2, // Authority type: "2" represents Account Owner
+      initializerMainAccount.publicKey // Setting the new Authority to null
+    );
+    */
+
+    const vaultAccountBumps: number[] = [vaultAccountBumpA, vaultAccountBumpB];
+    console.log("vaultAccountBumps", vaultAccountBumps);
 
     const [_vaultSolAccountPda, _vaultSolAccountBump] =
       await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("vault-sol-account"))],
+        [
+          anchor.utils.bytes.utf8.encode("vault-sol-account"),
+          initializerMainAccount.publicKey.toBuffer(),
+          takerMainAccount.publicKey.toBuffer(),
+        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
         program.programId
       );
     vaultSolAccountPda = _vaultSolAccountPda;
+    vaultSolAccountBump = _vaultSolAccountBump;
+    console.log("vaultSolAccountPda", vaultSolAccountPda); // 毎回まったく同じPDAが生成される　programID変えても同じ
+    console.log("vaultSolAccountBump", vaultSolAccountBump); // 毎回まったく同じPDAが生成される　programID変えても同じ
 
-    const [_vault_authority_pda, _vault_authority_bump] =
+    const [_vaultAuthorityPda, _vaultAuthorityBump] =
       await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("escrow"))],
+        [
+          anchor.utils.bytes.utf8.encode("vault-authority"),
+          initializerMainAccount.publicKey.toBuffer(),
+          takerMainAccount.publicKey.toBuffer(),
+        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
         program.programId
       );
-    vault_authority_pda = _vault_authority_pda;
+    vaultAuthorityPda = _vaultAuthorityPda;
+    vaultAuthorityBump = _vaultAuthorityBump;
+    console.log("vaultAuthorityPda", vaultAuthorityPda);
+    console.log("vaultAuthorityBump", vaultAuthorityBump);
+
+    console.log("start initialize");
+    console.log(
+      "initializerTokenAccountA.address",
+      initializerTokenAccountA.address
+    );
+
+    // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
+    // writebleである必要があるかどうかは不明？
+    const remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountA.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaA,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountB.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaB,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
 
     await program.rpc.initialize(
-      new anchor.BN(initializerAmount),
       new anchor.BN(initializerAdditionalSolAmount),
-      new anchor.BN(takerAmount),
       new anchor.BN(takerAdditionalSolAmount),
+      2,
+      3,
+      Buffer.from(vaultAccountBumps), // Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          mint: mintA.publicKey,
-          vaultAccount: vault_account_pda,
-          initializerDepositTokenAccount: initializerTokenAccountA,
-          initializerReceiveTokenAccount: initializerTokenAccountB,
+          // vaultAccount: vaultAccountPda,
           vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -313,13 +462,15 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount),
+          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
         ],
-        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとエラーになる
+        remainingAccounts: remainingAccounts,
+        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとError: Signature verification failed
       }
     );
-
-    let _vault = await mintA.getAccountInfo(vault_account_pda);
+    /*
+    console.log("start assertion");
+    let _vault = await provider.connection.getAccountInfo(vault_account_pda);
     console.log("_vault.owner", _vault.owner);
     console.log("vault_authority_pda", vault_authority_pda);
 
@@ -333,9 +484,9 @@ describe("anchor-escrow", () => {
     // Check that the values in the escrow account match what we expect.
     assert.ok(
       _escrowAccount.initializerKey.equals(initializerMainAccount.publicKey)
-    );
-    assert.ok(_escrowAccount.initializerAmount.toNumber() == initializerAmount);
-    assert.ok(_escrowAccount.takerAmount.toNumber() == takerAmount);
+    );*/
+
+    /* NFTの数をチェック
     assert.ok(
       _escrowAccount.initializerDepositTokenAccount.equals(
         initializerTokenAccountA
@@ -346,6 +497,11 @@ describe("anchor-escrow", () => {
         initializerTokenAccountB
       )
     );
+    */
+
+    // 連続してinitializeしたときのテスト
+
+    // 同じ組み合わせのinitializer, takerで二重に取引できない
   });
 
   it("Exchange escrow state", async () => {
@@ -360,7 +516,7 @@ describe("anchor-escrow", () => {
         initializer: initializerMainAccount.publicKey,
         escrowAccount: escrowAccount.publicKey,
         vaultAccount: vault_account_pda,
-        vaultAuthority: vault_authority_pda,
+        vaultAuthority: vaultAuthorityPda,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
       },
