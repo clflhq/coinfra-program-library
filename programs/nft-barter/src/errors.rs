@@ -22,4 +22,6 @@ pub enum MyError {
     VaultAccountBumpsMismatch,
     #[msg("PdaPublicKeyMismatch")]
     PdaPublicKeyMismatch,
+    #[msg("AssociatedAuthorityMismatch")]
+    AssociatedAuthorityMismatch,
 }

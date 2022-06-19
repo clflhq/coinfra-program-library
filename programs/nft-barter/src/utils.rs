@@ -1,4 +1,4 @@
-use crate::errors::MyError;
+use crate::{errors::MyError, nft_barter};
 use {
     anchor_lang::{
         prelude::*,
@@ -14,8 +14,16 @@ pub fn assert_is_ata<'a>(
 ) -> Result<spl_token::state::Account> {
     assert_owned_by(ata, &spl_token::id())?; // AccountInfoのownerは、Program that owns this account　https://docs.rs/solana-program/1.5.0/solana_program/account_info/struct.AccountInfo.html
     let ata_account: spl_token::state::Account = assert_initialized(ata)?;
-    assert_keys_equal(&ata_account.owner, wallet)?; // Accountのownerは、The owner of this account. https://docs.rs/spl-token/latest/spl_token/state/struct.Account.html
-    assert_keys_equal(&get_associated_token_address(wallet, mint.key), ata.key)?;
+    assert_keys_equal(
+        &ata_account.owner,
+        wallet,
+        MyError::AssociatedAuthorityMismatch,
+    )?; // Accountのownerは、The owner of this account. https://docs.rs/spl-token/latest/spl_token/state/struct.Account.html
+    assert_keys_equal(
+        &get_associated_token_address(wallet, mint.key),
+        ata.key,
+        MyError::AssociatedTokenPublicKeyMismatch,
+    )?;
     Ok(ata_account)
 }
 
@@ -36,7 +44,7 @@ pub fn assert_owned_by(account_info: &AccountInfo, owner: &Pubkey) -> Result<()>
     Ok(())
 }
 
-pub fn assert_keys_equal(key1: &Pubkey, key2: &Pubkey) -> Result<()> {
-    require_keys_eq!(*key1, *key2, MyError::AssociatedTokenPublicKeyMismatch);
+pub fn assert_keys_equal(key1: &Pubkey, key2: &Pubkey, error_code: MyError) -> Result<()> {
+    require_keys_eq!(*key1, *key2, error_code);
     Ok(())
 }

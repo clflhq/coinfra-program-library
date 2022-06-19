@@ -155,8 +155,38 @@ describe("anchor-escrow", () => {
       mintB,
       initializerMainAccount.publicKey
     );
+    initializerTokenAccountC = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      initializerMainAccount,
+      mintC,
+      initializerMainAccount.publicKey
+    );
+    initializerTokenAccountD = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      initializerMainAccount,
+      mintD,
+      initializerMainAccount.publicKey
+    );
+    initializerTokenAccountE = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      initializerMainAccount,
+      mintE,
+      initializerMainAccount.publicKey
+    );
 
     // mintC mintD mintEはtakerが保有している
+    takerTokenAccountA = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      takerMainAccount,
+      mintA,
+      takerMainAccount.publicKey
+    );
+    takerTokenAccountB = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      takerMainAccount,
+      mintB,
+      takerMainAccount.publicKey
+    );
     takerTokenAccountC = await getOrCreateAssociatedTokenAccount(
       provider.connection,
       takerMainAccount,
@@ -518,7 +548,7 @@ describe("anchor-escrow", () => {
       new anchor.BN(takerAdditionalSolAmount),
       2,
       3,
-      Buffer.from(vaultAccountBumps), // Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
+      Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -583,24 +613,192 @@ describe("anchor-escrow", () => {
   });
 
   it("Exchange escrow state", async () => {
-    await program.rpc.exchange({
-      accounts: {
-        taker: takerMainAccount.publicKey,
-        takerDepositTokenAccount: takerTokenAccountB,
-        takerReceiveTokenAccount: takerTokenAccountA,
-        initializerDepositTokenAccount: initializerTokenAccountA,
-        initializerReceiveTokenAccount: initializerTokenAccountB,
-        vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
-        initializer: initializerMainAccount.publicKey,
-        escrowAccount: escrowAccount.publicKey,
-        vaultAccount: vault_account_pda,
-        vaultAuthority: vaultAuthorityPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [takerMainAccount],
-    });
+    console.log("vaultAccountPdaA", vaultAccountPdaA);
+    console.log("vaultAccountPdaB", vaultAccountPdaB);
 
+    const remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaA,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaB,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintB, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountA.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountB.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintB, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    console.log("initializerMainAccount", initializerMainAccount);
+    console.log(
+      "initializerMainAccount.publicKey",
+      initializerMainAccount.publicKey
+    );
+    console.log("takerMainAccount", takerMainAccount);
+    console.log("takerMainAccount.publicKey", takerMainAccount.publicKey);
+    console.log("vaultSolAccountPda", vaultSolAccountPda);
+    console.log("vaultAuthorityPda", vaultAuthorityPda);
+
+    /* escrowに入っているお金を抜けないかテスト
+      programでやると抜ける
+      tsでやろうとすると次のエラー Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: invalid program argument
+    await provider.send(
+      (() => {
+        const tx = new Transaction();
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: escrowAccount.publicKey,
+            toPubkey: takerMainAccount.publicKey,
+            lamports: 100,
+          })
+        );
+        return tx;
+      })(),
+      [escrowAccount]
+    );
+
+    const beforeInitializer = await provider.connection.getAccountInfo(
+      initializerMainAccount.publicKey
+    );
+    console.log("beforeInitializer.lamports", beforeInitializer.lamports);
+    await program.rpc.exchange2(
+      new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
+      new anchor.BN(takerAdditionalSolAmount),
+      2,
+      3,
+      {
+        accounts: {
+          //takerDepositTokenAccount: takerTokenAccountB,
+          //takerReceiveTokenAccount: takerTokenAccountA,
+          //initializerDepositTokenAccount: initializerTokenAccountA,
+          //initializerReceiveTokenAccount: initializerTokenAccountB,
+          taker: takerMainAccount.publicKey,
+          vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
+          initializer: initializerMainAccount.publicKey,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAuthority: vaultAuthorityPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        remainingAccounts: remainingAccounts,
+        signers: [initializerMainAccount],
+      }
+    );
+    */
+
+    await program.rpc.exchange(
+      new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
+      new anchor.BN(takerAdditionalSolAmount),
+      2,
+      3,
+      {
+        accounts: {
+          //takerDepositTokenAccount: takerTokenAccountB,
+          //takerReceiveTokenAccount: takerTokenAccountA,
+          //initializerDepositTokenAccount: initializerTokenAccountA,
+          //initializerReceiveTokenAccount: initializerTokenAccountB,
+          taker: takerMainAccount.publicKey,
+          vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
+          initializer: initializerMainAccount.publicKey,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAuthority: vaultAuthorityPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        remainingAccounts: remainingAccounts,
+        signers: [takerMainAccount],
+      }
+    );
+
+    /*
     let _takerTokenAccountA = await mintA.getAccountInfo(takerTokenAccountA);
     let _takerTokenAccountB = await mintB.getAccountInfo(takerTokenAccountB);
     let _initializerTokenAccountA = await mintA.getAccountInfo(
@@ -610,16 +808,24 @@ describe("anchor-escrow", () => {
       initializerTokenAccountB
     );
 
+    
     assert.ok(_takerTokenAccountA.amount.toNumber() == initializerAmount);
     assert.ok(_initializerTokenAccountA.amount.toNumber() == 0);
     assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
     assert.ok(_takerTokenAccountB.amount.toNumber() == 0);
+*/
 
     // initializerで署名してもvaultからsol引き落とそうとしたらError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
     // のエラーがでるが、テストで保証しておきたい
 
     // 追加SOLのチェック token closeしないとずれる
     // close = initializerありなしでもずれる
+    /* close = initializer入れてるから以下は取得できない
+    let _escrowAccount2 = await provider.connection.getAccountInfo(
+      escrowAccount.publicKey
+    );
+    console.log("_escrowAccount2.lamports", _escrowAccount2.lamports);
+    */
     const initializer = await provider.connection.getAccountInfo(
       initializerMainAccount.publicKey
     );
@@ -629,6 +835,39 @@ describe("anchor-escrow", () => {
       "initializerAdditionalSolAmount",
       initializerAdditionalSolAmount
     );
+
+    const initializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    initializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
+    /* return {
+          pubkey: token.pubkey,
+          mint,
+          owner: token.owner,
+          amount: Number(amount.uiAmountString),
+          isNft: await isNft(mint, amount),
+        }*/
+
+    const takerTokens = await provider.connection.getParsedTokenAccountsByOwner(
+      takerMainAccount.publicKey,
+      {
+        programId: TOKEN_PROGRAM_ID,
+      }
+    );
+    takerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
+
     /*
     assert.ok(
       _escrowAccount.initializerAdditionalSolAmount.toNumber() ==
