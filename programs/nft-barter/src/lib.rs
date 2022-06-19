@@ -15,7 +15,11 @@ Controller
 */
 #[program]
 pub mod nft_barter {
-    use anchor_lang::solana_program::program::{invoke, invoke_signed};
+    use anchor_lang::solana_program::{
+        program::{invoke, invoke_signed},
+        program_pack::Pack,
+        system_instruction,
+    };
 
     use super::*;
 
@@ -59,8 +63,9 @@ pub mod nft_barter {
 
         // NFTの数の検証
         let initializer_nft_amount_count = initializer_nft_amount as usize;
+        let taker_nft_amount_count = taker_nft_amount as usize;
         let remaining_accounts_count =
-            initializer_nft_amount_count * 2 as usize + taker_nft_amount as usize; // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
+            initializer_nft_amount_count * 3 as usize + taker_nft_amount_count * 2 as usize; // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
         require_eq!(
             ctx.remaining_accounts.len(),
             remaining_accounts_count,
@@ -84,6 +89,19 @@ pub mod nft_barter {
                 }
         */
 
+        // takerにはvaultがないため、token accountとmintだけ
+        for index in 0..taker_nft_amount_count {
+            // Token Accountの検証
+            let account = assert_is_ata(
+                &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2],
+                ctx.accounts.taker.key,
+                &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2 + 1],
+            )?;
+
+            // NFTをちゃんと持っていることの検証
+            require_eq!(account.amount, 1, MyError::NotFoundNft);
+        }
+
         /* ok */
         let (vault_authority, _vault_authority_bump) = Pubkey::find_program_address(
             &[
@@ -94,37 +112,38 @@ pub mod nft_barter {
             ctx.program_id,
         );
 
-        // 偶数番にtoken account 奇数番にvault account
+        // 3で割ってあまり0にtoken account 1にvault account 2にmint account これがないとspl_token::instruction::initialize_accountが無理
         for index in 0..initializer_nft_amount_count {
             // Token Accountの検証
-            let token_account = &ctx.remaining_accounts[index * 2];
-            let account = assert_is_ata(token_account, ctx.accounts.initializer.key)?;
+            let token_account = &ctx.remaining_accounts[index * 3];
+            let vault_account = &ctx.remaining_accounts[index * 3 + 1];
+            let mint_account = &ctx.remaining_accounts[index * 3 + 2];
+            let account = assert_is_ata(token_account, ctx.accounts.initializer.key, mint_account)?;
 
             // NFTをちゃんと持っていることの検証
             require_eq!(account.amount, 1, MyError::NotFoundNft);
 
             // bumpからPDAの生成 PDA使う必要なし
-            let vault_account = &ctx.remaining_accounts[index * 2 + 1];
-            /*
-                       let vault_account_bump = vault_account_bumps[index];
-                       let vault_pda = Pubkey::create_program_address(
-                           &[
-                               b"vault-account",
-                               token_account.key().as_ref(),
-                               &[vault_account_bump],
-                           ],
-                           &ctx.program_id,
-                       )
-                       .unwrap();
+            // let vault_account = &ctx.remaining_accounts[index * 2 + 1];
 
+            let vault_account_bump = vault_account_bumps[index];
+            let vault_pda = Pubkey::create_program_address(
+                &[
+                    b"vault-account",
+                    token_account.key().as_ref(),
+                    &[vault_account_bump],
+                ],
+                &ctx.program_id,
+            )
+            .unwrap();
 
-                       // 渡されたPDAの検証
-                       let vault_account = &ctx.remaining_accounts[index * 2 + 1];
-                       require_keys_eq!(
-                           vault_pda,
-                           vault_account.key(),
-                           MyError::PdaPublicKeyMismatch
-                       );
+            // 渡されたPDAの検証
+
+            require_keys_eq!(
+                vault_pda,
+                vault_account.key(),
+                MyError::PdaPublicKeyMismatch
+            );
 
             msg!("vault_account.owner {}", vault_account.owner);
             msg!(
@@ -134,7 +153,7 @@ pub mod nft_barter {
             msg!(
                 "escrow_account.owner {}",
                 *ctx.accounts.escrow_account.to_account_info().owner
-            );*/
+            );
             /*
             msg!(
                 "vault_account.owner {}",
@@ -181,6 +200,47 @@ pub mod nft_barter {
                     ]])
             */
 
+            let create_account_ix = system_instruction::create_account(
+                &ctx.accounts.initializer.key(),
+                &vault_account.key(),
+                ctx.accounts
+                    .rent
+                    .minimum_balance(spl_token::state::Account::LEN),
+                spl_token::state::Account::LEN as u64,
+                &spl_token::id(),
+            );
+            // ただのinvokeだとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account
+            invoke_signed(
+                &create_account_ix,
+                &[
+                    ctx.accounts.initializer.clone(),
+                    vault_account.clone(), // これないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: An account required by the instruction is missing
+                                           // ctx.accounts.token_program.clone(), token programはなくても通る
+                ],
+                &[&[
+                    b"vault-account",
+                    token_account.key().as_ref(),
+                    &[vault_account_bump],
+                ]],
+            )?;
+
+            let initialize_account_ix = spl_token::instruction::initialize_account(
+                &spl_token::id(),
+                &vault_account.key(),
+                &mint_account.key(),
+                &ctx.accounts.initializer.key(),
+            )?;
+            // ここはinvoke_signedでなくても動く ちなみにinvoke_signedでも動く
+            invoke(
+                &initialize_account_ix,
+                &[
+                    ctx.accounts.initializer.clone(),
+                    vault_account.clone(),
+                    mint_account.clone(), // なくすとmissing error
+                    ctx.accounts.rent.to_account_info().clone(), // 超難関ポイント　rentがないと動かない　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: An account required by the instruction is missing
+                ],
+            )?;
+
             // writableにしてwith_signerつけても駄目
             token::set_authority(
                 ctx.accounts.into_set_authority_context(vault_account),
@@ -189,24 +249,14 @@ pub mod nft_barter {
             )?;
 
             // NFTをinitializerに戻す
-
-            /*
             token::transfer(
-                ctx.accounts.into_transfer_to_pda_context(
-                    &ctx.remaining_accounts[index * 2],
-                    &ctx.remaining_accounts[index * 2 + 1],
-                ),
+                ctx.accounts
+                    .into_transfer_to_pda_context(&token_account, &vault_account),
                 1,
-            )?;*/
+            )?;
         }
         /*
-        for index in initializer_nft_amount_count * 2..remaining_accounts_count {
-            // Token Accountの検証
-            let account = assert_is_ata(&ctx.remaining_accounts[index], ctx.accounts.taker.key)?;
 
-            // NFTをちゃんと持っていることの検証
-            require_eq!(account.amount, 1, MyError::NotFoundNft);
-        }
 
         /* ok*/
         ctx.accounts.escrow_account.initializer_key = *ctx.accounts.initializer.key;

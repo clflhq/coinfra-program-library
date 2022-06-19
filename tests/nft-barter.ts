@@ -320,7 +320,6 @@ describe("anchor-escrow", () => {
     vaultAccountPda = _vaultAccountPda;
     vaultAccountBump = _vaultAccountBump;
 
-    /*
     const [_vaultAccountPdaA, _vaultAccountBumpA] =
       await PublicKey.findProgramAddress(
         [
@@ -334,7 +333,8 @@ describe("anchor-escrow", () => {
     console.log("initializerTokenAccountA", initializerTokenAccountA);
     console.log("vaultAccountPdaA", vaultAccountPdaA);
     console.log("vaultAccountBumpA", vaultAccountBumpA);
-*/
+
+    /* 以下でも動くがrustに移管する 
     const createTempTokenAccountAIx = SystemProgram.createAccount({
       programId: TOKEN_PROGRAM_ID,
       space: AccountLayout.span,
@@ -350,6 +350,7 @@ describe("anchor-escrow", () => {
       initializerMainAccount.publicKey,
       TOKEN_PROGRAM_ID
     );
+*/
 
     /*
     await setAuthority(
@@ -366,7 +367,6 @@ describe("anchor-escrow", () => {
     // let _vault = await provider.connection.getAccountInfo(vaultAccountPdaA);
     // console.log("_vault", _vault);
 
-    /*
     const [_vaultAccountPdaB, _vaultAccountBumpB] =
       await PublicKey.findProgramAddress(
         [
@@ -380,7 +380,8 @@ describe("anchor-escrow", () => {
     console.log("initializerTokenAccountB", initializerTokenAccountB);
     console.log("vaultAccountPdaB", vaultAccountPdaB);
     console.log("vaultAccountBumpB", vaultAccountBumpB);
-*/
+
+    /*
     const createTempTokenAccountBIx = SystemProgram.createAccount({
       programId: TOKEN_PROGRAM_ID,
       space: AccountLayout.span,
@@ -396,7 +397,7 @@ describe("anchor-escrow", () => {
       initializerMainAccount.publicKey,
       TOKEN_PROGRAM_ID
     );
-
+*/
     /*
     await setAuthority(
       provider.connection,
@@ -445,6 +446,9 @@ describe("anchor-escrow", () => {
       initializerTokenAccountA.address
     );
 
+    console.log("mintA", mintA);
+    console.log("mintB", mintB);
+
     // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
     // writebleである必要があるかどうかは不明？
     const remainingAccounts = [];
@@ -454,8 +458,13 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
     remainingAccounts.push({
-      pubkey: vaultAccountA.publicKey,
+      pubkey: vaultAccountPdaA, //vaultAccountA.publicKeyでも動くがPDAに移管
       isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
       isSigner: false,
     });
     remainingAccounts.push({
@@ -464,8 +473,13 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
     remainingAccounts.push({
-      pubkey: vaultAccountB.publicKey,
+      pubkey: vaultAccountPdaB, //vaultAccountB.publicKeyでも動くがPDAに移管
       isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintB, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
       isSigner: false,
     });
     remainingAccounts.push({
@@ -474,13 +488,28 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
     remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
       pubkey: takerTokenAccountD.address,
       isWritable: true,
       isSigner: false,
     });
     remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
       pubkey: takerTokenAccountE.address,
       isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
       isSigner: false,
     });
 
@@ -503,17 +532,17 @@ describe("anchor-escrow", () => {
         },
         instructions: [
           await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
-          createTempTokenAccountAIx,
-          initTempAccountAIx,
-          createTempTokenAccountBIx,
-          initTempAccountBIx,
+          // createTempTokenAccountAIx, RUSTに移管
+          //initTempAccountAIx,
+          //createTempTokenAccountBIx,
+          // initTempAccountBIx,
         ],
         remainingAccounts: remainingAccounts,
         signers: [
           escrowAccount,
           initializerMainAccount,
-          vaultAccountA,
-          vaultAccountB,
+          // vaultAccountA,
+          // vaultAccountB,
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );

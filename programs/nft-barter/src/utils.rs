@@ -10,12 +10,12 @@ use {
 pub fn assert_is_ata<'a>(
     ata: &AccountInfo,
     wallet: &Pubkey,
-    // mint: &Pubkey,
+    mint: &AccountInfo,
 ) -> Result<spl_token::state::Account> {
     assert_owned_by(ata, &spl_token::id())?; // AccountInfoのownerは、Program that owns this account　https://docs.rs/solana-program/1.5.0/solana_program/account_info/struct.AccountInfo.html
     let ata_account: spl_token::state::Account = assert_initialized(ata)?;
     assert_keys_equal(&ata_account.owner, wallet)?; // Accountのownerは、The owner of this account. https://docs.rs/spl-token/latest/spl_token/state/struct.Account.html
-                                                    // assert_keys_equal(&get_associated_token_address(wallet, mint), ata.key)?;
+    assert_keys_equal(&get_associated_token_address(wallet, mint.key), ata.key)?;
     Ok(ata_account)
 }
 
