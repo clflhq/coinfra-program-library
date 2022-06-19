@@ -15,7 +15,7 @@ Controller
 */
 #[program]
 pub mod nft_barter {
-    use anchor_lang::solana_program::program::invoke;
+    use anchor_lang::solana_program::program::{invoke, invoke_signed};
 
     use super::*;
 
@@ -103,25 +103,28 @@ pub mod nft_barter {
             // NFTをちゃんと持っていることの検証
             require_eq!(account.amount, 1, MyError::NotFoundNft);
 
-            // bumpからPDAの生成
-            let vault_account_bump = vault_account_bumps[index];
-            let vault_pda = Pubkey::create_program_address(
-                &[
-                    b"vault-account",
-                    token_account.key().as_ref(),
-                    &[vault_account_bump],
-                ],
-                &ctx.program_id,
-            )
-            .unwrap();
-
-            // 渡されたPDAの検証
+            // bumpからPDAの生成 PDA使う必要なし
             let vault_account = &ctx.remaining_accounts[index * 2 + 1];
-            require_keys_eq!(
-                vault_pda,
-                vault_account.key(),
-                MyError::PdaPublicKeyMismatch
-            );
+            /*
+                       let vault_account_bump = vault_account_bumps[index];
+                       let vault_pda = Pubkey::create_program_address(
+                           &[
+                               b"vault-account",
+                               token_account.key().as_ref(),
+                               &[vault_account_bump],
+                           ],
+                           &ctx.program_id,
+                       )
+                       .unwrap();
+
+
+                       // 渡されたPDAの検証
+                       let vault_account = &ctx.remaining_accounts[index * 2 + 1];
+                       require_keys_eq!(
+                           vault_pda,
+                           vault_account.key(),
+                           MyError::PdaPublicKeyMismatch
+                       );
 
             msg!("vault_account.owner {}", vault_account.owner);
             msg!(
@@ -131,7 +134,7 @@ pub mod nft_barter {
             msg!(
                 "escrow_account.owner {}",
                 *ctx.accounts.escrow_account.to_account_info().owner
-            );
+            );*/
             /*
             msg!(
                 "vault_account.owner {}",
@@ -151,14 +154,14 @@ pub mod nft_barter {
                     ]])
             */
 
-            /* 生のSolanaでやっても駄目
+            /* 生のSolanaでやっても駄目 invoke_signedでも駄目
             let owner_change_ix = spl_token::instruction::set_authority(
                 ctx.accounts.token_program.key,
                 vault_account.key,
                 Some(&vault_authority),
                 spl_token::instruction::AuthorityType::AccountOwner,
-                ctx.accounts.system_program.key,
-                &[&ctx.accounts.system_program.key],
+                ctx.accounts.initializer.key,
+                &[&ctx.accounts.initializer.key],
             )?;
 
             msg!("Calling the token program to transfer token account ownership...");
@@ -169,14 +172,21 @@ pub mod nft_barter {
                     ctx.accounts.initializer.clone(),
                     ctx.accounts.token_program.clone(),
                 ],
-            )?;
+            )?;*/
+            /* seed 例
+            .with_signer(&[&[
+                        b"vault-account",
+                        token_account.key().as_ref(),
+                        &[vault_account_bump],
+                    ]])
             */
-            /*
+
+            // writableにしてwith_signerつけても駄目
             token::set_authority(
                 ctx.accounts.into_set_authority_context(vault_account),
                 AuthorityType::AccountOwner,
                 Some(vault_authority),
-            )?;*/
+            )?;
 
             // NFTをinitializerに戻す
 
@@ -639,9 +649,9 @@ impl<'info> Initialize<'info> {
     ) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
         let cpi_accounts = SetAuthority {
             account_or_mint: vault_account.clone(),
-            current_authority: self.system_program.to_account_info().clone(),
+            current_authority: self.initializer.clone(),
         };
-        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
+        CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
     fn into_add_authority_to_vault_sol_account_context(

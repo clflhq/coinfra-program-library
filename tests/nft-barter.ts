@@ -3,12 +3,14 @@ import { Program } from "@project-serum/anchor";
 import { NftBarter } from "../target/types/nft_barter";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import {
+  AccountLayout,
   TOKEN_PROGRAM_ID,
   setAuthority,
   createMint,
   mintTo,
   getOrCreateAssociatedTokenAccount,
   getAccount,
+  createInitializeAccountInstruction,
 } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -40,10 +42,13 @@ describe("anchor-escrow", () => {
   let vaultAccountPda: anchor.web3.PublicKey = null; // テスト用　使っていない
   let vaultAccountBump: number = null;
 
-  let vaultAccountPdaA: anchor.web3.PublicKey = null; // initializerがmintAを預ける用のvault
+  let vaultAccountPdaA: anchor.web3.PublicKey = null; // initializerがmintAを預ける用のvault vaultはPDAにする必要がない
   let vaultAccountBumpA: number = null;
+  let vaultAccountA: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+
   let vaultAccountPdaB: anchor.web3.PublicKey = null; // initializerがmintBを預ける用のvault
   let vaultAccountBumpB: number = null;
+  let vaultAccountB: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
   let vaultSolAccountPda: anchor.web3.PublicKey = null;
   let vaultSolAccountBump: number = null;
@@ -56,11 +61,12 @@ describe("anchor-escrow", () => {
   const initializerAdditionalSolAmount = 1_000_000_000; // lamport
   const takerAdditionalSolAmount = 3_000_000_000; // lamport
 
-  const escrowAccount = anchor.web3.Keypair.generate();
-  const payer = anchor.web3.Keypair.generate();
-  const mintAuthority = anchor.web3.Keypair.generate();
-  const initializerMainAccount = anchor.web3.Keypair.generate();
-  const takerMainAccount = anchor.web3.Keypair.generate();
+  const escrowAccount: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+  const payer: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+  const mintAuthority: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+  const initializerMainAccount: anchor.web3.Keypair =
+    anchor.web3.Keypair.generate();
+  const takerMainAccount: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
   it("Initialize program state", async () => {
     console.log("start airdrop");
@@ -314,6 +320,7 @@ describe("anchor-escrow", () => {
     vaultAccountPda = _vaultAccountPda;
     vaultAccountBump = _vaultAccountBump;
 
+    /*
     const [_vaultAccountPdaA, _vaultAccountBumpA] =
       await PublicKey.findProgramAddress(
         [
@@ -327,6 +334,22 @@ describe("anchor-escrow", () => {
     console.log("initializerTokenAccountA", initializerTokenAccountA);
     console.log("vaultAccountPdaA", vaultAccountPdaA);
     console.log("vaultAccountBumpA", vaultAccountBumpA);
+*/
+    const createTempTokenAccountAIx = SystemProgram.createAccount({
+      programId: TOKEN_PROGRAM_ID,
+      space: AccountLayout.span,
+      lamports: await provider.connection.getMinimumBalanceForRentExemption(
+        AccountLayout.span
+      ),
+      fromPubkey: initializerMainAccount.publicKey,
+      newAccountPubkey: vaultAccountA.publicKey,
+    });
+    const initTempAccountAIx = createInitializeAccountInstruction(
+      vaultAccountA.publicKey,
+      mintA,
+      initializerMainAccount.publicKey,
+      TOKEN_PROGRAM_ID
+    );
 
     /*
     await setAuthority(
@@ -343,6 +366,7 @@ describe("anchor-escrow", () => {
     // let _vault = await provider.connection.getAccountInfo(vaultAccountPdaA);
     // console.log("_vault", _vault);
 
+    /*
     const [_vaultAccountPdaB, _vaultAccountBumpB] =
       await PublicKey.findProgramAddress(
         [
@@ -356,6 +380,22 @@ describe("anchor-escrow", () => {
     console.log("initializerTokenAccountB", initializerTokenAccountB);
     console.log("vaultAccountPdaB", vaultAccountPdaB);
     console.log("vaultAccountBumpB", vaultAccountBumpB);
+*/
+    const createTempTokenAccountBIx = SystemProgram.createAccount({
+      programId: TOKEN_PROGRAM_ID,
+      space: AccountLayout.span,
+      lamports: await provider.connection.getMinimumBalanceForRentExemption(
+        AccountLayout.span
+      ),
+      fromPubkey: initializerMainAccount.publicKey,
+      newAccountPubkey: vaultAccountB.publicKey,
+    });
+    const initTempAccountBIx = createInitializeAccountInstruction(
+      vaultAccountB.publicKey,
+      mintB,
+      initializerMainAccount.publicKey,
+      TOKEN_PROGRAM_ID
+    );
 
     /*
     await setAuthority(
@@ -414,7 +454,7 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
     remainingAccounts.push({
-      pubkey: vaultAccountPdaA,
+      pubkey: vaultAccountA.publicKey,
       isWritable: true,
       isSigner: false,
     });
@@ -424,7 +464,7 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
     remainingAccounts.push({
-      pubkey: vaultAccountPdaB,
+      pubkey: vaultAccountB.publicKey,
       isWritable: true,
       isSigner: false,
     });
@@ -463,9 +503,18 @@ describe("anchor-escrow", () => {
         },
         instructions: [
           await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          createTempTokenAccountAIx,
+          initTempAccountAIx,
+          createTempTokenAccountBIx,
+          initTempAccountBIx,
         ],
         remainingAccounts: remainingAccounts,
-        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとError: Signature verification failed
+        signers: [
+          escrowAccount,
+          initializerMainAccount,
+          vaultAccountA,
+          vaultAccountB,
+        ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
     /*
