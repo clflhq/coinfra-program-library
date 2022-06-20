@@ -541,92 +541,129 @@ pub mod nft_barter {
         */
         Ok(())
     }
+
+    pub fn cancel_by_initializer<'info>(
+        ctx: Context<'_, '_, '_, 'info, CancelByInitializer<'info>>,
+    ) -> Result<()> {
+        msg!("start cancel_by_initializer");
+
+        let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
+            &[
+                VAULT_AUTHORITY_PDA_SEED,
+                ctx.accounts.initializer.key().as_ref(),
+                ctx.accounts.taker.key().as_ref(),
+            ],
+            ctx.program_id,
+        );
+        /*
+        with_signer(&[&[
+                        VAULT_AUTHORITY_PDA_SEED,
+                        ctx.accounts.initializer.key().as_ref(),
+                        ctx.accounts.taker.key().as_ref(),
+                        &[vault_authority_bump],
+                    ]]),*/
+
+        // 追加のsolをinitializerに戻す
+        /*
+        let initializer_additional_sol_amount = ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount;
+        **ctx
+            .accounts
+            .escrow_account
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
+        **ctx.accounts.initializer.try_borrow_mut_lamports()? += initializer_additional_sol_amount;*/
+
+        // TODO: vaultの一致の確認
+
+        // NFTをinitializerに戻す
+        let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
+        for index in 0..initializer_nft_amount_count {
+            token::transfer(
+                ctx.accounts
+                    .into_transfer_to_initializer_context(
+                        &ctx.remaining_accounts[index * 3 + 1],
+                        &ctx.remaining_accounts[index * 3],
+                    )
+                    .with_signer(&[&[
+                        VAULT_AUTHORITY_PDA_SEED,
+                        ctx.accounts.initializer.key().as_ref(),
+                        ctx.accounts.taker.key().as_ref(),
+                        &[vault_authority_bump],
+                    ]]),
+                1,
+            )?;
+
+            // NFTのtoken accountをcloseする
+            token::close_account(
+                ctx.accounts
+                    .into_close_context(&ctx.remaining_accounts[index * 3 + 1])
+                    .with_signer(&[&[
+                        VAULT_AUTHORITY_PDA_SEED,
+                        ctx.accounts.initializer.key().as_ref(),
+                        ctx.accounts.taker.key().as_ref(),
+                        &[vault_authority_bump],
+                    ]]),
+            )?;
+        }
+
+        // TODO: initializer_additional_sol_amountの一致を確認
+
+        // vault_sol_accountをcloseする
+        // TODO: typescript側でチェック
+
+        msg!("end cancel_by_initializer");
+        Ok(())
+    }
+
     /*
-            pub fn cancel_by_initializer(ctx: Context<CancelByInitializer>) -> Result<()> {
-                msg!("start cancel_by_initializer");
+    pub fn cancel_by_taker<'info>(
+        ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
+    ) -> Result<()> {
+        msg!("start cancel_by_taker");
 
-                let (_vault_authority, vault_authority_bump) =
-                    Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
-                let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
+        let (_vault_authority, vault_authority_bump) =
+            Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
+        let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
 
-                // NFTをinitializerに戻す
-                token::transfer(
-                    ctx.accounts
-                        .into_transfer_to_initializer_context()
-                        .with_signer(&[&authority_seeds[..]]),
-                    1,
-                )?;
+        // NFTをinitializerに戻す
+        token::transfer(
+            ctx.accounts
+                .into_transfer_to_initializer_context()
+                .with_signer(&[&authority_seeds[..]]),
+            1,
+        )?;
 
-                // 追加のsolをinitializerに戻す
-                **ctx
-                    .accounts
-                    .vault_sol_account
-                    .to_account_info()
-                    .try_borrow_mut_lamports()? -= ctx
-                    .accounts
-                    .escrow_account
-                    .initializer_additional_sol_amount;
-                **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
-                    .accounts
-                    .escrow_account
-                    .initializer_additional_sol_amount;
+        // 追加のsolをinitializerに戻す
+        **ctx
+            .accounts
+            .vault_sol_account
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount;
+        **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount;
 
-                // NFTのtoken accountをcloseする
-                token::close_account(
-                    ctx.accounts
-                        .into_close_context()
-                        .with_signer(&[&authority_seeds[..]]),
-                )?;
+        // NFTのtoken accountをcloseする
+        token::close_account(
+            ctx.accounts
+                .into_close_context()
+                .with_signer(&[&authority_seeds[..]]),
+        )?;
 
-                // vault_sol_accountをcloseする
+        // vault_sol_accountをcloseする
 
-                msg!("end cancel_by_initializer");
-                Ok(())
-            }
+        msg!("end cancel_by_taker");
 
-            pub fn cancel_by_taker(ctx: Context<CancelByTaker>) -> Result<()> {
-                msg!("start cancel_by_taker");
-
-                let (_vault_authority, vault_authority_bump) =
-                    Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
-                let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
-
-                // NFTをinitializerに戻す
-                token::transfer(
-                    ctx.accounts
-                        .into_transfer_to_initializer_context()
-                        .with_signer(&[&authority_seeds[..]]),
-                    1,
-                )?;
-
-                // 追加のsolをinitializerに戻す
-                **ctx
-                    .accounts
-                    .vault_sol_account
-                    .to_account_info()
-                    .try_borrow_mut_lamports()? -= ctx
-                    .accounts
-                    .escrow_account
-                    .initializer_additional_sol_amount;
-                **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
-                    .accounts
-                    .escrow_account
-                    .initializer_additional_sol_amount;
-
-    // NFTのtoken accountをcloseする
-                token::close_account(
-                    ctx.accounts
-                        .into_close_context()
-                        .with_signer(&[&authority_seeds[..]]),
-                )?;
-
-                // vault_sol_accountをcloseする
-
-                msg!("end cancel_by_taker");
-
-                Ok(())
-            }
-            */
+        Ok(())
+    }
+    */
 }
 
 /*
@@ -763,23 +800,28 @@ pub struct Exchange<'info> {
     pub system_program: Program<'info, System>,
 }
 
+// cancelの前に何かトランザクションを差し込まれても不利な取引が成立することはないのでcancelの場合のfrontrunningの考慮は不要
 #[derive(Accounts)]
 pub struct CancelByInitializer<'info> {
     // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub initializer: AccountInfo<'info>,
-    #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
-    pub vault_account: Account<'info, TokenAccount>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(mut)]
+    pub taker: AccountInfo<'info>,
+    // #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
+    // pub vault_account: Account<'info, TokenAccount>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
-    #[account(mut)]
-    pub initializer_deposit_token_account: Account<'info, TokenAccount>,
+    //[account(mut)]
+    //pub initializer_deposit_token_account: Account<'info, TokenAccount>,
     // #[account(mut)]
     // pub vault_sol_account: Account<'info, TokenAccount>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
+        constraint = escrow_account.taker_key == *taker.key,
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
@@ -795,12 +837,12 @@ pub struct CancelByTaker<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub taker: AccountInfo<'info>,
-    #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
-    pub vault_account: Account<'info, TokenAccount>,
+    // #[account(mut, seeds = [b"vault-account".as_ref()], bump = escrow_account.vault_account_bump)]
+    // pub vault_account: Account<'info, TokenAccount>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
-    #[account(mut)]
-    pub initializer_deposit_token_account: Account<'info, TokenAccount>,
+    // #[account(mut)]
+    // pub initializer_deposit_token_account: Account<'info, TokenAccount>,
     // #[account(mut)]
     // pub vault_sol_account: Account<'info, TokenAccount>,
     #[account(
@@ -923,30 +965,33 @@ impl<'info> Exchange<'info> {
 impl<'info> CancelByInitializer<'info> {
     fn into_transfer_to_initializer_context(
         &self,
+        vault_account: &AccountInfo<'info>,
+        initializer_nft_token_account: &AccountInfo<'info>,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
         // 読んだ
         let cpi_accounts = Transfer {
-            from: self.vault_account.to_account_info().clone(),
-            to: self
-                .initializer_deposit_token_account
-                .to_account_info()
-                .clone(),
+            from: vault_account.clone(),
+            to: initializer_nft_token_account.clone(),
             authority: self.vault_authority.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
-        // 読んだがExchangeと同じなので共通化したいところ
+    fn into_close_context(
+        &self,
+        vault_account: &AccountInfo<'info>,
+    ) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        // 読んだ
         let cpi_accounts = CloseAccount {
-            account: self.vault_account.to_account_info().clone(),
-            destination: self.initializer.clone(),
+            account: vault_account.clone(),
+            destination: self.initializer.clone(), // initializerに権限を返却する
             authority: self.vault_authority.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 }
 
+/*
 impl<'info> CancelByTaker<'info> {
     fn into_transfer_to_initializer_context(
         &self,
@@ -973,3 +1018,4 @@ impl<'info> CancelByTaker<'info> {
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 }
+ */

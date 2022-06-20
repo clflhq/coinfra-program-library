@@ -50,6 +50,15 @@ describe("anchor-escrow", () => {
   let vaultAccountBumpB: number = null;
   let vaultAccountB: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
+  let vaultAccountPdaC: anchor.web3.PublicKey = null; // initializerがmintCを預ける用のvault
+  let vaultAccountBumpC: number = null;
+
+  let vaultAccountPdaD: anchor.web3.PublicKey = null; // initializerがmintDを預ける用のvault
+  let vaultAccountBumpD: number = null;
+
+  let vaultAccountPdaE: anchor.web3.PublicKey = null; // initializerがmintEを預ける用のvault
+  let vaultAccountBumpE: number = null;
+
   // let vaultSolAccountPda: anchor.web3.PublicKey = null;
   // let vaultSolAccountBump: number = null;
 
@@ -218,6 +227,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
+    /*　cancel時にmintToするのでコメントアウト
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -226,6 +236,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
+    */
 
     await mintTo(
       provider.connection,
@@ -235,6 +246,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
+    /* cancel時にmintToするのでコメントアウト
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -243,6 +255,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
+    */
 
     await mintTo(
       provider.connection,
@@ -252,6 +265,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
+    /* cancel時にmintToするのでコメントアウト
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -260,7 +274,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
-
+*/
     await mintTo(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -269,6 +283,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
+    /* cancel時にmintToするのでコメントアウト
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -277,7 +292,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
-
+*/
     await mintTo(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -286,6 +301,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
+    /* cancel時にmintToするのでコメントアウト
     await setAuthority(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -294,7 +310,7 @@ describe("anchor-escrow", () => {
       0, // Authority type: "0" represents Mint Tokens
       null // Setting the new Authority to null
     );
-
+*/
     console.log("start assertion");
     console.log(initializerTokenAccountA);
     console.log(initializerTokenAccountA.amount);
@@ -568,7 +584,7 @@ describe("anchor-escrow", () => {
           //createTempTokenAccountBIx,
           // initTempAccountBIx,
         ],
-        remainingAccounts: remainingAccounts,
+        remainingAccounts,
         signers: [
           escrowAccount,
           initializerMainAccount,
@@ -774,6 +790,41 @@ describe("anchor-escrow", () => {
     );
     */
 
+    const beforeInitializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+
+    console.log(
+      "initializer main account",
+      initializerMainAccount.publicKey.toBase58() // TODO: これで所有者のチェック可能
+    );
+    beforeInitializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer", account.data.parsed.info);
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
+
+    const beforeTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+
+    console.log("taker main account", takerMainAccount.publicKey);
+    beforeTakerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker", account.data.parsed.info);
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
+
     await program.rpc.exchange(
       new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
       new anchor.BN(takerAdditionalSolAmount),
@@ -793,7 +844,7 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
         },
-        remainingAccounts: remainingAccounts,
+        remainingAccounts,
         signers: [takerMainAccount],
       }
     );
@@ -836,33 +887,27 @@ describe("anchor-escrow", () => {
       initializerAdditionalSolAmount
     );
 
-    const initializerAccounts =
+    const afterInitializerAccounts =
       await provider.connection.getParsedTokenAccountsByOwner(
         initializerMainAccount.publicKey,
         {
           programId: TOKEN_PROGRAM_ID,
         }
       );
-    initializerAccounts.value.map(({ account }) => {
+    afterInitializerAccounts.value.map(({ account }) => {
       const { mint, tokenAmount } = account.data.parsed.info;
       console.log("initializer mint", mint);
       console.log("initializer tokenAmount", tokenAmount);
     });
-    /* return {
-          pubkey: token.pubkey,
-          mint,
-          owner: token.owner,
-          amount: Number(amount.uiAmountString),
-          isNft: await isNft(mint, amount),
-        }*/
 
-    const takerTokens = await provider.connection.getParsedTokenAccountsByOwner(
-      takerMainAccount.publicKey,
-      {
-        programId: TOKEN_PROGRAM_ID,
-      }
-    );
-    takerTokens.value.map(({ account }) => {
+    const afterTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    afterTakerTokens.value.map(({ account }) => {
       const { mint, tokenAmount } = account.data.parsed.info;
       console.log("taker mint", mint);
       console.log("taker tokenAmount", tokenAmount);
@@ -899,98 +944,360 @@ describe("anchor-escrow", () => {
     */
   });
 
-  /*
   it("Initialize escrow and cancel escrow by A", async () => {
-    // Put back tokens into initializer token A account.
-    await mintA.mintTo(
-      initializerTokenAccountA,
-      mintAuthority.publicKey,
-      [mintAuthority],
-      initializerAmount
+    /*
+    console.log("start mint NFT");
+    // Put back tokens into initializer token A account. このmintToはNFTを再度割り振っているだけなのでintegration時には不要な処理
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintA, // Mint for the account
+      initializerTokenAccountA.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
     );
 
+    console.log("mintTo B");
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintB, // Mint for the account
+      initializerTokenAccountB.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintC, // Mint for the account
+      takerTokenAccountC.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintD, // Mint for the account
+      takerTokenAccountD.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+
+    await mintTo(
+      provider.connection,
+      payer, // Payer of the transaction fees
+      mintE, // Mint for the account
+      takerTokenAccountE.address, // Address of the account to mint to
+      mintAuthority, // Minting authority
+      1 // Amount to mint
+    );
+*/
+
+    // exchangeしたなのでinitializerがC D EのNFT takerがA BのNFTを持っている
+    const [_vaultAccountPdaC, _vaultAccountBumpC] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountC.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaC = _vaultAccountPdaC;
+    vaultAccountBumpC = _vaultAccountBumpC;
+    console.log("initializerTokenAccountC", initializerTokenAccountC);
+    console.log("vaultAccountPdaC", vaultAccountPdaC);
+    console.log("vaultAccountBumpC", vaultAccountBumpC);
+
+    const [_vaultAccountPdaD, _vaultAccountBumpD] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountD.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaD = _vaultAccountPdaD;
+    vaultAccountBumpD = _vaultAccountBumpD;
+    console.log("initializerTokenAccountD", initializerTokenAccountD);
+    console.log("vaultAccountPdaD", vaultAccountPdaD);
+    console.log("vaultAccountBumpD", vaultAccountBumpD);
+
+    const [_vaultAccountPdaE, _vaultAccountBumpE] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountE.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaE = _vaultAccountPdaE;
+    vaultAccountBumpE = _vaultAccountBumpE;
+    console.log("initializerTokenAccountE", initializerTokenAccountE);
+    console.log("vaultAccountPdaE", vaultAccountPdaE);
+    console.log("vaultAccountBumpE", vaultAccountBumpE);
+
+    const vaultAccountBumps: number[] = [
+      vaultAccountBumpC,
+      vaultAccountBumpD,
+      vaultAccountBumpE,
+    ];
+    console.log("vaultAccountBumps", vaultAccountBumps);
+
+    let remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaD, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaE, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountA.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountB.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintB, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+
     await program.rpc.initialize(
-      new anchor.BN(initializerAmount),
-      new anchor.BN(initializer_additional_sol_amount),
-      new anchor.BN(takerAmount),
-      new anchor.BN(taker_additional_sol_amount),
+      new anchor.BN(initializerAdditionalSolAmount),
+      new anchor.BN(takerAdditionalSolAmount),
+      3,
+      2,
+      Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          mint: mintA.publicKey,
-          vaultAccount: vault_account_pda,
-          initializerDepositTokenAccount: initializerTokenAccountA,
-          initializerReceiveTokenAccount: initializerTokenAccountB,
-          vaultSolAccount: vaultSolAccountPda,
+          // vaultAccount: vaultAccountPda,
+          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount),
+          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          // createTempTokenAccountAIx, RUSTに移管
+          //initTempAccountAIx,
+          //createTempTokenAccountBIx,
+          // initTempAccountBIx,
         ],
-        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとエラーになる
+        remainingAccounts: remainingAccounts,
+        signers: [
+          escrowAccount,
+          initializerMainAccount,
+          // vaultAccountA,
+          // vaultAccountB,
+        ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
 
-    // Cancel the escrow.
-    await program.rpc.cancelByInitializer({
-      accounts: {
-        initializer: initializerMainAccount.publicKey,
-        vaultAccount: vault_account_pda,
-        vaultAuthority: vault_authority_pda,
-        initializerDepositTokenAccount: initializerTokenAccountA,
-        vaultSolAccount: vaultSolAccountPda,
-        escrowAccount: escrowAccount.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      signers: [initializerMainAccount],
+    // 以下からが実際のcancel時に必要な処理
+    // remaining accountsの構造　initializerの返却するNFTのみ 3で割った mod0がtoken account mod1がvault account mod2がmint
+    console.log("start cancel");
+    remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaD, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaE, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
     });
 
-    // Check the final owner should be the provider public key.
-    const _initializerTokenAccountA = await mintA.getAccountInfo(
-      initializerTokenAccountA
-    );
-    assert.ok(
-      _initializerTokenAccountA.owner.equals(initializerMainAccount.publicKey)
-    );
+    const beforeInitializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    beforeInitializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
 
-    // Check all the funds are still there.
-    assert.ok(_initializerTokenAccountA.amount.toNumber() == initializerAmount);
+    const beforeTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    beforeTakerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
 
-    // token AccountBのチェックを入れてみた
-    const _initializerTokenAccountB = await mintB.getAccountInfo(
-      initializerTokenAccountB
-    );
-    assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
-  });
-
-  it("Initialize escrow and cancel escrow by B", async () => {
-    await program.rpc.initialize(
-      new anchor.BN(initializerAmount),
-      new anchor.BN(initializer_additional_sol_amount),
-      new anchor.BN(takerAmount),
-      new anchor.BN(taker_additional_sol_amount),
+    // Cancel the escrow.
+    await program.rpc.cancelByInitializer(
+      // new anchor.BN(initializerAdditionalSolAmount),
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          mint: mintA.publicKey,
-          vaultAccount: vault_account_pda,
-          initializerDepositTokenAccount: initializerTokenAccountA,
-          initializerReceiveTokenAccount: initializerTokenAccountB,
-          vaultSolAccount: vaultSolAccount.publicKey,
+          vaultAuthority: vaultAuthorityPda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [initializerMainAccount],
+        remainingAccounts,
+      }
+    );
+
+    const afterInitializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    afterInitializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
+
+    const afterTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    afterTakerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
+  });
+
+  /*
+  it("Initialize escrow and cancel escrow by B", async () => {
+    await program.rpc.initialize(
+      new anchor.BN(initializerAdditionalSolAmount),
+      new anchor.BN(takerAdditionalSolAmount),
+      2,
+      3,
+      Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
+      {
+        accounts: {
+          initializer: initializerMainAccount.publicKey,
+          taker: takerMainAccount.publicKey,
+          // vaultAccount: vaultAccountPda,
+          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount),
+          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          // createTempTokenAccountAIx, RUSTに移管
+          //initTempAccountAIx,
+          //createTempTokenAccountBIx,
+          // initTempAccountBIx,
         ],
-        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとエラーになる
+        remainingAccounts: remainingAccounts,
+        signers: [
+          escrowAccount,
+          initializerMainAccount,
+          // vaultAccountA,
+          // vaultAccountB,
+        ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
 
