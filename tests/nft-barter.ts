@@ -67,8 +67,8 @@ describe("anchor-escrow", () => {
 
   const initializerStartSolAmount = 2_000_000_000;
   const takerStartSolAmount = 5_000_000_000;
-  const initializerAdditionalSolAmount = 1_000_000_000; // lamport
-  const takerAdditionalSolAmount = 3_000_000_000; // lamport
+  const initializerAdditionalSolAmount = 500_000_000; // lamport
+  const takerAdditionalSolAmount = 1_000_000_000; // lamport
 
   const escrowAccount: anchor.web3.Keypair = anchor.web3.Keypair.generate();
   const payer: anchor.web3.Keypair = anchor.web3.Keypair.generate();
@@ -1145,6 +1145,10 @@ describe("anchor-escrow", () => {
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
+    let _escrowAccount = await provider.connection.getAccountInfo(
+      escrowAccount.publicKey
+    );
+    console.log("_escrowAccount.lamports", _escrowAccount.lamports);
 
     // 以下からが実際のcancel時に必要な処理
     // remaining accountsの構造　initializerの返却するNFTのみ 3で割った mod0がtoken account mod1がvault account mod2がmint
