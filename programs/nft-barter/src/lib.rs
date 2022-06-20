@@ -673,7 +673,6 @@ pub mod nft_barter {
         msg!("end cancel_by_initializer");
         Ok(())
     }
-
     /*
     pub fn cancel_by_taker<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
@@ -1003,22 +1002,74 @@ impl<'info> Exchange<'info> {
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
+}
 
-    fn into_close_context(
-        &self,
-        vault_account: &AccountInfo<'info>,
-    ) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
-        // 読んだ
-        let cpi_accounts = CloseAccount {
-            account: vault_account.clone(),
-            destination: self.initializer.clone(), // initializerに権限を返却する
-            authority: self.vault_authority.clone(),
-        };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+impl<'info> Common<'info> for Exchange<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info> {
+        return &self.vault_authority;
+    }
+
+    fn initializer(&self) -> &AccountInfo<'info> {
+        return &self.initializer;
+    }
+
+    fn token_program(&self) -> &AccountInfo<'info> {
+        return &self.token_program;
     }
 }
 
-impl<'info> CancelByInitializer<'info> {
+impl<'info> Cancel<'info> for CancelByInitializer<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info> {
+        return &self.vault_authority;
+    }
+
+    fn token_program(&self) -> &AccountInfo<'info> {
+        return &self.token_program;
+    }
+}
+
+impl<'info> Common<'info> for CancelByInitializer<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info> {
+        return &self.vault_authority;
+    }
+
+    fn initializer(&self) -> &AccountInfo<'info> {
+        return &self.initializer;
+    }
+
+    fn token_program(&self) -> &AccountInfo<'info> {
+        return &self.token_program;
+    }
+}
+
+impl<'info> Cancel<'info> for CancelByTaker<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info> {
+        return &self.vault_authority;
+    }
+
+    fn token_program(&self) -> &AccountInfo<'info> {
+        return &self.token_program;
+    }
+}
+
+impl<'info> Common<'info> for CancelByTaker<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info> {
+        return &self.vault_authority;
+    }
+
+    fn initializer(&self) -> &AccountInfo<'info> {
+        return &self.initializer;
+    }
+
+    fn token_program(&self) -> &AccountInfo<'info> {
+        return &self.token_program;
+    }
+}
+
+pub trait Cancel<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info>;
+    fn token_program(&self) -> &AccountInfo<'info>;
+
     fn into_transfer_to_initializer_context(
         &self,
         vault_account: &AccountInfo<'info>,
@@ -1028,10 +1079,16 @@ impl<'info> CancelByInitializer<'info> {
         let cpi_accounts = Transfer {
             from: vault_account.clone(),
             to: initializer_nft_token_account.clone(),
-            authority: self.vault_authority.clone(),
+            authority: self.vault_authority().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program().clone(), cpi_accounts)
     }
+}
+
+pub trait Common<'info> {
+    fn vault_authority(&self) -> &AccountInfo<'info>;
+    fn initializer(&self) -> &AccountInfo<'info>;
+    fn token_program(&self) -> &AccountInfo<'info>;
 
     fn into_close_context(
         &self,
@@ -1040,38 +1097,9 @@ impl<'info> CancelByInitializer<'info> {
         // 読んだ
         let cpi_accounts = CloseAccount {
             account: vault_account.clone(),
-            destination: self.initializer.clone(), // initializerに権限を返却する
-            authority: self.vault_authority.clone(),
+            destination: self.initializer().clone(), // initializerに権限を返却する
+            authority: self.vault_authority().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program().clone(), cpi_accounts)
     }
 }
-
-/*
-impl<'info> CancelByTaker<'info> {
-    fn into_transfer_to_initializer_context(
-        &self,
-    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        // 読んだ
-        let cpi_accounts = Transfer {
-            from: self.vault_account.to_account_info().clone(),
-            to: self
-                .initializer_deposit_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.vault_authority.clone(),
-        };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
-    }
-
-    fn into_close_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
-        // 読んだがExchangeと同じなので共通化したいところ
-        let cpi_accounts = CloseAccount {
-            account: self.vault_account.to_account_info().clone(),
-            destination: self.initializer.clone(),
-            authority: self.vault_authority.clone(),
-        };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
-    }
-}
- */

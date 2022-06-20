@@ -1,4 +1,4 @@
-use crate::{errors::MyError, nft_barter};
+use crate::{errors::MyError, nft_barter, CancelByInitializer};
 use {
     anchor_lang::{
         prelude::*,
