@@ -50,8 +50,8 @@ describe("anchor-escrow", () => {
   let vaultAccountBumpB: number = null;
   let vaultAccountB: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
-  let vaultSolAccountPda: anchor.web3.PublicKey = null;
-  let vaultSolAccountBump: number = null;
+  // let vaultSolAccountPda: anchor.web3.PublicKey = null;
+  // let vaultSolAccountBump: number = null;
 
   let vaultAuthorityPda: anchor.web3.PublicKey = null;
   let vaultAuthorityBump: number = null;
@@ -442,6 +442,7 @@ describe("anchor-escrow", () => {
     const vaultAccountBumps: number[] = [vaultAccountBumpA, vaultAccountBumpB];
     console.log("vaultAccountBumps", vaultAccountBumps);
 
+    /*
     const [_vaultSolAccountPda, _vaultSolAccountBump] =
       await PublicKey.findProgramAddress(
         [
@@ -455,7 +456,7 @@ describe("anchor-escrow", () => {
     vaultSolAccountBump = _vaultSolAccountBump;
     console.log("vaultSolAccountPda", vaultSolAccountPda); // 毎回まったく同じPDAが生成される　programID変えても同じ
     console.log("vaultSolAccountBump", vaultSolAccountBump); // 毎回まったく同じPDAが生成される　programID変えても同じ
-
+*/
     const [_vaultAuthorityPda, _vaultAuthorityBump] =
       await PublicKey.findProgramAddress(
         [
@@ -554,7 +555,7 @@ describe("anchor-escrow", () => {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
           // vaultAccount: vaultAccountPda,
-          vaultSolAccount: vaultSolAccountPda,
+          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
@@ -724,7 +725,6 @@ describe("anchor-escrow", () => {
     );
     console.log("takerMainAccount", takerMainAccount);
     console.log("takerMainAccount.publicKey", takerMainAccount.publicKey);
-    console.log("vaultSolAccountPda", vaultSolAccountPda);
     console.log("vaultAuthorityPda", vaultAuthorityPda);
 
     /* escrowに入っているお金を抜けないかテスト
@@ -786,7 +786,7 @@ describe("anchor-escrow", () => {
           //initializerDepositTokenAccount: initializerTokenAccountA,
           //initializerReceiveTokenAccount: initializerTokenAccountB,
           taker: takerMainAccount.publicKey,
-          vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
+          // vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
           initializer: initializerMainAccount.publicKey,
           escrowAccount: escrowAccount.publicKey,
           vaultAuthority: vaultAuthorityPda,

@@ -147,10 +147,7 @@ pub mod nft_barter {
             );
 
             msg!("vault_account.owner {}", vault_account.owner);
-            msg!(
-                "vault_sol_account.owner {}",
-                *ctx.accounts.vault_sol_account.to_account_info().owner
-            );
+
             msg!(
                 "escrow_account.owner {}",
                 *ctx.accounts.escrow_account.to_account_info().owner
@@ -272,7 +269,7 @@ pub mod nft_barter {
         ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
 
         // ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
-        ctx.accounts.vault_sol_account.bump = *ctx.bumps.get("vault_sol_account").unwrap();
+        // ctx.accounts.vault_sol_account.bump = *ctx.bumps.get("vault_sol_account").unwrap();
         /*
         msg!(
             "ctx.accounts.escrow_account.vault_account_bump {}",
@@ -329,7 +326,7 @@ pub mod nft_barter {
             &ix,
             &[
                 ctx.accounts.initializer.clone(),
-                ctx.accounts.vault_sol_account.to_account_info(),
+                // ctx.accounts.vault_sol_account.to_account_info(),
                 ctx.accounts.escrow_account.to_account_info().clone(),
             ],
         )?;
@@ -652,29 +649,30 @@ pub struct Initialize<'info> {
     pub taker: AccountInfo<'info>,
     // pub mint: Account<'info, Mint>,
     /*
-    #[account(
-        init,
-        seeds = [b"vault-account-test".as_ref()],
-        bump,
-        payer = initializer,
-        token::mint = mint,
-        token::authority = initializer,
-    )]
-    pub vault_account: Account<'info, TokenAccount>,*/
-    // ここをmutにすると、Error: 3012: The program expected this account to be already initialized
-    #[account(
-        init,
-        // initializer.key().as_ref()を加えるとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account
-        // これはts側でseedをちゃんと設定してないからと思われる
-        seeds = [b"vault-sol-account", initializer.key().as_ref(), taker.key().as_ref()], // b"vault-sol-account"のあとに.as_ref()をつけるとError: 3003: Failed to deserialize the account?　ここではなくEscrowAccountのbumps
-        bump,
-        payer = initializer,
-        space = 100, // spaceが足りないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Program failed to complete
-        constraint = initializer.lamports() >= initializer_additional_sol_amount,
-        constraint = taker.lamports() >= taker_additional_sol_amount,
-    )]
-    pub vault_sol_account: Account<'info, VaultSolAccount>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2　手数料と追加のsolを入れる箱 yawwwでも取引ごとに作られている　ここBoxにしてもError: 3007: The given account is owned by a different program than expected
-
+        #[account(
+            init,
+            seeds = [b"vault-account-test".as_ref()],
+            bump,
+            payer = initializer,
+            token::mint = mint,
+            token::authority = initializer,
+        )]
+        pub vault_account: Account<'info, TokenAccount>,*/
+        // ここをmutにすると、Error: 3012: The program expected this account to be already initialized
+        /*
+        #[account(
+            init,
+            // initializer.key().as_ref()を加えるとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account
+            // これはts側でseedをちゃんと設定してないからと思われる
+            seeds = [b"vault-sol-account", initializer.key().as_ref(), taker.key().as_ref()], // b"vault-sol-account"のあとに.as_ref()をつけるとError: 3003: Failed to deserialize the account?　ここではなくEscrowAccountのbumps
+            bump,
+            payer = initializer,
+            space = 100, // spaceが足りないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Program failed to complete
+            constraint = initializer.lamports() >= initializer_additional_sol_amount,
+            constraint = taker.lamports() >= taker_additional_sol_amount,
+        )]
+        pub vault_sol_account: Account<'info, VaultSolAccount>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2　手数料と追加のsolを入れる箱 yawwwでも取引ごとに作られている　ここBoxにしてもError: 3007: The given account is owned by a different program than expected
+    */
     #[account(zero)]
     pub escrow_account: Box<Account<'info, EscrowAccount>>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2
     pub system_program: Program<'info, System>,
@@ -719,8 +717,8 @@ pub struct Exchange2<'info> {
     // close = initializerをいれると残高がずれる
     /// CHECK: This is not dangerous because we don't read or write from this account
     /// 関係なし Error: Invalid arguments: taker not provided.
-    #[account(mut, seeds = [b"vault-sol-account".as_ref(), initializer.key().as_ref(), taker.key().as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
-    pub vault_sol_account: Box<Account<'info, VaultSolAccount>>, // BoxにしてもError: 3012: The program expected this account to be already initialized
+    // #[account(mut, seeds = [b"vault-sol-account".as_ref(), initializer.key().as_ref(), taker.key().as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
+    // pub vault_sol_account: Box<Account<'info, VaultSolAccount>>, // BoxにしてもError: 3012: The program expected this account to be already initialized
     pub system_program: Program<'info, System>,
 }
 
@@ -760,8 +758,8 @@ pub struct Exchange<'info> {
     // close = initializerをいれると残高がずれる
     /// CHECK: This is not dangerous because we don't read or write from this account
     /// 関係なし Error: Invalid arguments: taker not provided.
-    #[account(mut, seeds = [b"vault-sol-account".as_ref(), initializer.key().as_ref(), taker.key().as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
-    pub vault_sol_account: Box<Account<'info, VaultSolAccount>>, // BoxにしてもError: 3012: The program expected this account to be already initialized
+    // #[account(mut, seeds = [b"vault-sol-account".as_ref(), initializer.key().as_ref(), taker.key().as_ref()], bump = vault_sol_account.bump, constraint = taker.lamports() >= escrow_account.taker_additional_sol_amount)]
+    // pub vault_sol_account: Box<Account<'info, VaultSolAccount>>, // BoxにしてもError: 3012: The program expected this account to be already initialized
     pub system_program: Program<'info, System>,
 }
 
@@ -777,8 +775,8 @@ pub struct CancelByInitializer<'info> {
     pub vault_authority: AccountInfo<'info>,
     #[account(mut)]
     pub initializer_deposit_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_sol_account: Account<'info, TokenAccount>,
+    // #[account(mut)]
+    // pub vault_sol_account: Account<'info, TokenAccount>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
@@ -803,8 +801,8 @@ pub struct CancelByTaker<'info> {
     pub vault_authority: AccountInfo<'info>,
     #[account(mut)]
     pub initializer_deposit_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_sol_account: Account<'info, TokenAccount>,
+    // #[account(mut)]
+    // pub vault_sol_account: Account<'info, TokenAccount>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
@@ -829,7 +827,7 @@ pub struct EscrowAccount {
     pub taker_nft_amount: u8,
     pub taker_additional_sol_amount: u64,
     pub vault_account_bump: u8,
-    pub vault_sol_account_bump: u8,
+    // pub vault_sol_account_bump: u8,
     // pub vault_account_bumps: Vec<u8>,
 }
 
@@ -867,7 +865,7 @@ impl<'info> Initialize<'info> {
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
-
+    /*
     fn into_add_authority_to_vault_sol_account_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
@@ -876,7 +874,7 @@ impl<'info> Initialize<'info> {
             current_authority: self.initializer.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
-    }
+    } */
 }
 
 impl<'info> Exchange<'info> {
