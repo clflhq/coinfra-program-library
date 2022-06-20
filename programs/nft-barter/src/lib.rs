@@ -13,6 +13,8 @@ declare_id!("FRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2");
 /*
 Controller
 */
+const VAULT_AUTHORITY_PDA_SEED: &[u8] = b"vault-authority";
+
 #[program]
 pub mod nft_barter {
     use anchor_lang::solana_program::{
@@ -22,8 +24,6 @@ pub mod nft_barter {
     };
 
     use super::*;
-
-    const VAULT_AUTHORITY_PDA_SEED: &[u8] = b"vault-authority";
 
     pub fn initialize2<'info>(
         ctx: Context<'_, '_, '_, 'info, InitializeForTest<'info>>,
@@ -545,6 +545,7 @@ pub mod nft_barter {
     pub fn cancel_by_initializer<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByInitializer<'info>>,
     ) -> Result<()> {
+        //my_fn(ctx.accounts, ctx.remaining_accounts, ctx.program_id);
         msg!("start cancel_by_initializer");
 
         let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
@@ -673,52 +674,139 @@ pub mod nft_barter {
         msg!("end cancel_by_initializer");
         Ok(())
     }
-    /*
+
     pub fn cancel_by_taker<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
     ) -> Result<()> {
+        //my_fn(ctx.accounts, ctx.remaining_accounts, ctx.program_id);
         msg!("start cancel_by_taker");
 
-        let (_vault_authority, vault_authority_bump) =
-            Pubkey::find_program_address(&[VAULT_AUTHORITY_PDA_SEED], ctx.program_id);
-        let authority_seeds = &[&VAULT_AUTHORITY_PDA_SEED[..], &[vault_authority_bump]];
-
-        // NFTをinitializerに戻す
-        token::transfer(
-            ctx.accounts
-                .into_transfer_to_initializer_context()
-                .with_signer(&[&authority_seeds[..]]),
-            1,
-        )?;
+        let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
+            &[
+                VAULT_AUTHORITY_PDA_SEED,
+                ctx.accounts.initializer.key().as_ref(),
+                ctx.accounts.taker.key().as_ref(),
+            ],
+            ctx.program_id,
+        );
 
         // 追加のsolをinitializerに戻す
+        msg!(
+            "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount {}",
+            ctx.accounts
+                .escrow_account
+                .initializer_additional_sol_amount
+        );
+        msg!(
+            "ctx.accounts.escrow_account.to_account_info().lamports {}",
+            ctx.accounts
+                .escrow_account
+                .to_account_info()
+                .try_borrow_mut_lamports()?
+        );
+        msg!(
+            "ctx.accounts.initializer.lamports {}",
+            ctx.accounts.initializer.try_borrow_mut_lamports()?
+        );
+
+        // TODO: vaultの一致の確認
+
+        // NFTをinitializerに戻す
+
+        let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
+        for index in 0..initializer_nft_amount_count {
+            token::transfer(
+                ctx.accounts
+                    .into_transfer_to_initializer_context(
+                        &ctx.remaining_accounts[index * 3 + 1],
+                        &ctx.remaining_accounts[index * 3],
+                    )
+                    .with_signer(&[&[
+                        VAULT_AUTHORITY_PDA_SEED,
+                        ctx.accounts.initializer.key().as_ref(),
+                        ctx.accounts.taker.key().as_ref(),
+                        &[vault_authority_bump],
+                    ]]),
+                1,
+            )?;
+
+            // NFTのtoken accountをcloseする
+            token::close_account(
+                ctx.accounts
+                    .into_close_context(&ctx.remaining_accounts[index * 3 + 1])
+                    .with_signer(&[&[
+                        VAULT_AUTHORITY_PDA_SEED,
+                        ctx.accounts.initializer.key().as_ref(),
+                        ctx.accounts.taker.key().as_ref(),
+                        &[vault_authority_bump],
+                    ]]),
+            )?;
+        }
+
+        msg!(
+            "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount2 {}",
+            ctx.accounts
+                .escrow_account
+                .initializer_additional_sol_amount
+        );
+        msg!(
+            "ctx.accounts.escrow_account.to_account_info().lamports2 {}",
+            ctx.accounts
+                .escrow_account
+                .to_account_info()
+                .try_borrow_mut_lamports()?
+        );
+        msg!(
+            "ctx.accounts.initializer.lamports2 {}",
+            ctx.accounts.initializer.try_borrow_mut_lamports()?
+        );
+        // 最難関： solanaのbugで金額を動かすのはinto_close_contextの後にする必要がある Ref: https://discord.com/channels/889577356681945098/889584618372734977/915190505002921994
+        let initializer_additional_sol_amount = ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount;
         **ctx
             .accounts
-            .vault_sol_account
+            .escrow_account
             .to_account_info()
-            .try_borrow_mut_lamports()? -= ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
-        **ctx.accounts.initializer.try_borrow_mut_lamports()? += ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
+            .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
+        **ctx.accounts.initializer.try_borrow_mut_lamports()? += initializer_additional_sol_amount; // ここを減らそうとすると　 Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
 
-        // NFTのtoken accountをcloseする
-        token::close_account(
+        msg!(
+            "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount3 {}",
             ctx.accounts
-                .into_close_context()
-                .with_signer(&[&authority_seeds[..]]),
-        )?;
+                .escrow_account
+                .initializer_additional_sol_amount
+        );
+        msg!(
+            "ctx.accounts.escrow_account.to_account_info().lamports3 {}",
+            ctx.accounts
+                .escrow_account
+                .to_account_info()
+                .try_borrow_mut_lamports()?
+        );
+        msg!(
+            "ctx.accounts.initializer.lamports3 {}",
+            ctx.accounts.initializer.try_borrow_mut_lamports()?
+        );
+
+        // TODO: initializer_additional_sol_amountの一致を確認
 
         // vault_sol_accountをcloseする
+        // TODO: typescript側でチェック
 
         msg!("end cancel_by_taker");
-
         Ok(())
     }
-    */
 }
 
 /*

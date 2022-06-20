@@ -1269,13 +1269,128 @@ describe("anchor-escrow", () => {
     });
   });
 
-  /*
   it("Initialize escrow and cancel escrow by B", async () => {
+    const [_vaultAccountPdaC, _vaultAccountBumpC] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountC.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaC = _vaultAccountPdaC;
+    vaultAccountBumpC = _vaultAccountBumpC;
+    console.log("initializerTokenAccountC", initializerTokenAccountC);
+    console.log("vaultAccountPdaC", vaultAccountPdaC);
+    console.log("vaultAccountBumpC", vaultAccountBumpC);
+
+    const [_vaultAccountPdaD, _vaultAccountBumpD] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountD.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaD = _vaultAccountPdaD;
+    vaultAccountBumpD = _vaultAccountBumpD;
+    console.log("initializerTokenAccountD", initializerTokenAccountD);
+    console.log("vaultAccountPdaD", vaultAccountPdaD);
+    console.log("vaultAccountBumpD", vaultAccountBumpD);
+
+    const [_vaultAccountPdaE, _vaultAccountBumpE] =
+      await PublicKey.findProgramAddress(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("vault-account")),
+          initializerTokenAccountE.address.toBuffer(),
+        ],
+        program.programId
+      );
+    vaultAccountPdaE = _vaultAccountPdaE;
+    vaultAccountBumpE = _vaultAccountBumpE;
+    console.log("initializerTokenAccountE", initializerTokenAccountE);
+    console.log("vaultAccountPdaE", vaultAccountPdaE);
+    console.log("vaultAccountBumpE", vaultAccountBumpE);
+
+    const vaultAccountBumps: number[] = [
+      vaultAccountBumpC,
+      vaultAccountBumpD,
+      vaultAccountBumpE,
+    ];
+    console.log("vaultAccountBumps", vaultAccountBumps);
+
+    let remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaD, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaE, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountA.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: takerTokenAccountB.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintB, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+
     await program.rpc.initialize(
       new anchor.BN(initializerAdditionalSolAmount),
       new anchor.BN(takerAdditionalSolAmount),
-      2,
       3,
+      2,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
@@ -1304,40 +1419,130 @@ describe("anchor-escrow", () => {
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
+    let _escrowAccount = await provider.connection.getAccountInfo(
+      escrowAccount.publicKey
+    );
+    console.log("_escrowAccount.lamports", _escrowAccount.lamports);
 
-    // Cancel the escrow.
-    await program.rpc.cancelByTaker({
-      accounts: {
-        initializer: initializerMainAccount.publicKey,
-        taker: takerMainAccount.publicKey,
-        vaultAccount: vault_account_pda,
-        vaultAuthority: vault_authority_pda,
-        initializerDepositTokenAccount: initializerTokenAccountA,
-        vaultSolAccount: vaultSolAccount.publicKey,
-        escrowAccount: escrowAccount.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      signers: [takerMainAccount],
+    // 以下からが実際のcancel時に必要な処理
+    // remaining accountsの構造　initializerの返却するNFTのみ 3で割った mod0がtoken account mod1がvault account mod2がmint
+    console.log("start cancel");
+    remainingAccounts = [];
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountC.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintC, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountD.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaD, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintD, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountE.address,
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: vaultAccountPdaE, //vaultAccountB.publicKeyでも動くがPDAに移管
+      isWritable: true,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: mintE, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
     });
 
-    // Check the final owner should be the provider public key.
-    const _initializerTokenAccountA = await mintA.getAccountInfo(
-      initializerTokenAccountA
-    );
-    assert.ok(
-      _initializerTokenAccountA.owner.equals(initializerMainAccount.publicKey)
+    const beforeInitializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    beforeInitializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
+
+    const beforeTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    beforeTakerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
+
+    // Cancel the escrow.
+    await program.rpc.cancelByTaker(
+      // new anchor.BN(initializerAdditionalSolAmount),
+      {
+        accounts: {
+          initializer: initializerMainAccount.publicKey,
+          taker: takerMainAccount.publicKey,
+          vaultAuthority: vaultAuthorityPda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [takerMainAccount],
+        remainingAccounts,
+      }
     );
 
-    // Check all the funds are still there.
-    assert.ok(_initializerTokenAccountA.amount.toNumber() == initializerAmount);
+    const afterInitializerAccounts =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        initializerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    afterInitializerAccounts.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("initializer mint", mint);
+      console.log("initializer tokenAmount", tokenAmount);
+    });
 
-    // token AccountBのチェックを入れてみた
-    const _initializerTokenAccountB = await mintB.getAccountInfo(
-      initializerTokenAccountB
-    );
-    assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
+    const afterTakerTokens =
+      await provider.connection.getParsedTokenAccountsByOwner(
+        takerMainAccount.publicKey,
+        {
+          programId: TOKEN_PROGRAM_ID,
+        }
+      );
+    afterTakerTokens.value.map(({ account }) => {
+      const { mint, tokenAmount } = account.data.parsed.info;
+      console.log("taker mint", mint);
+      console.log("taker tokenAmount", tokenAmount);
+    });
   });
-*/
+
   // initializerがSOL払う場合
 
   // takerがSOL払う場合
