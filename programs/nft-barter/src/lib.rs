@@ -15,6 +15,7 @@ Controller
 */
 const VAULT_AUTHORITY_PDA_SEED: &[u8] = b"vault-authority";
 
+// Context<'_, '_, '_, 'infoとContext<'info, 'info, 'info, 'infoが混じっているとthese two types are declared with different lifetimes　but data from `accounts` flows into `accounts` here
 #[program]
 pub mod nft_barter {
     use anchor_lang::solana_program::{
@@ -545,139 +546,39 @@ pub mod nft_barter {
     pub fn cancel_by_initializer<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByInitializer<'info>>,
     ) -> Result<()> {
-        //my_fn(ctx.accounts, ctx.remaining_accounts, ctx.program_id);
-        msg!("start cancel_by_initializer");
-
-        let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
-            &[
-                VAULT_AUTHORITY_PDA_SEED,
-                ctx.accounts.initializer.key().as_ref(),
-                ctx.accounts.taker.key().as_ref(),
-            ],
-            ctx.program_id,
-        );
-
-        // 追加のsolをinitializerに戻す
-        msg!(
-            "ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount {}",
-            ctx.accounts
-                .escrow_account
-                .initializer_additional_sol_amount
-        );
-        msg!(
-            "ctx.accounts.escrow_account.to_account_info().lamports {}",
-            ctx.accounts
-                .escrow_account
-                .to_account_info()
-                .try_borrow_mut_lamports()?
-        );
-        msg!(
-            "ctx.accounts.initializer.lamports {}",
-            ctx.accounts.initializer.try_borrow_mut_lamports()?
-        );
-
-        // TODO: vaultの一致の確認
-
-        // NFTをinitializerに戻す
-
-        let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
-        for index in 0..initializer_nft_amount_count {
-            token::transfer(
-                ctx.accounts
-                    .into_transfer_to_initializer_context(
-                        &ctx.remaining_accounts[index * 3 + 1],
-                        &ctx.remaining_accounts[index * 3],
-                    )
-                    .with_signer(&[&[
-                        VAULT_AUTHORITY_PDA_SEED,
-                        ctx.accounts.initializer.key().as_ref(),
-                        ctx.accounts.taker.key().as_ref(),
-                        &[vault_authority_bump],
-                    ]]),
-                1,
-            )?;
-
-            // NFTのtoken accountをcloseする
-            token::close_account(
-                ctx.accounts
-                    .into_close_context(&ctx.remaining_accounts[index * 3 + 1])
-                    .with_signer(&[&[
-                        VAULT_AUTHORITY_PDA_SEED,
-                        ctx.accounts.initializer.key().as_ref(),
-                        ctx.accounts.taker.key().as_ref(),
-                        &[vault_authority_bump],
-                    ]]),
-            )?;
-        }
-
-        msg!(
-            "ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount2 {}",
-            ctx.accounts
-                .escrow_account
-                .initializer_additional_sol_amount
-        );
-        msg!(
-            "ctx.accounts.escrow_account.to_account_info().lamports2 {}",
-            ctx.accounts
-                .escrow_account
-                .to_account_info()
-                .try_borrow_mut_lamports()?
-        );
-        msg!(
-            "ctx.accounts.initializer.lamports2 {}",
-            ctx.accounts.initializer.try_borrow_mut_lamports()?
-        );
-        // 最難関： solanaのbugで金額を動かすのはinto_close_contextの後にする必要がある Ref: https://discord.com/channels/889577356681945098/889584618372734977/915190505002921994
-        let initializer_additional_sol_amount = ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount;
-        **ctx
-            .accounts
-            .escrow_account
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
-        **ctx.accounts.initializer.try_borrow_mut_lamports()? += initializer_additional_sol_amount; // ここを減らそうとすると　 Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
-
-        msg!(
-            "ctx
-            .accounts
-            .escrow_account
-            .initializer_additional_sol_amount3 {}",
-            ctx.accounts
-                .escrow_account
-                .initializer_additional_sol_amount
-        );
-        msg!(
-            "ctx.accounts.escrow_account.to_account_info().lamports3 {}",
-            ctx.accounts
-                .escrow_account
-                .to_account_info()
-                .try_borrow_mut_lamports()?
-        );
-        msg!(
-            "ctx.accounts.initializer.lamports3 {}",
-            ctx.accounts.initializer.try_borrow_mut_lamports()?
-        );
-
-        // TODO: initializer_additional_sol_amountの一致を確認
-
-        // vault_sol_accountをcloseする
-        // TODO: typescript側でチェック
-
-        msg!("end cancel_by_initializer");
+        let cancel_context = &CancelContext {
+            accounts: &CancelContextAccounts {
+                initializer: ctx.accounts.initializer.clone(),
+                taker: ctx.accounts.taker.clone(),
+                vault_authority: ctx.accounts.vault_authority.clone(),
+                escrow_account: ctx.accounts.escrow_account.clone(),
+                token_program: ctx.accounts.token_program.clone(),
+            },
+            remaining_accounts: ctx.remaining_accounts,
+            program_id: &ctx.program_id,
+        };
+        cancel(cancel_context)?;
         Ok(())
     }
 
     pub fn cancel_by_taker<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
     ) -> Result<()> {
+        let cancel_context = &CancelContext {
+            accounts: &CancelContextAccounts {
+                initializer: ctx.accounts.initializer.clone(),
+                taker: ctx.accounts.taker.clone(),
+                vault_authority: ctx.accounts.vault_authority.clone(),
+                escrow_account: ctx.accounts.escrow_account.clone(),
+                token_program: ctx.accounts.token_program.clone(),
+            },
+            remaining_accounts: ctx.remaining_accounts,
+            program_id: &ctx.program_id,
+        };
+        cancel(cancel_context)?;
+        Ok(())
+
+        /*
         //my_fn(ctx.accounts, ctx.remaining_accounts, ctx.program_id);
         msg!("start cancel_by_taker");
 
@@ -806,6 +707,7 @@ pub mod nft_barter {
 
         msg!("end cancel_by_taker");
         Ok(())
+        */
     }
 }
 
@@ -1025,6 +927,248 @@ pub struct VaultSolAccount {
 /*
 Util
 */
+// 難関　ここで以下の仕様にあわせてlifetimeのa b cを設定しないとlifetimeエラー
+/*
+pub struct Context<'a, 'b, 'c, 'info, T> {
+    /// Currently executing program id.
+    pub program_id: &'a Pubkey,
+    /// Deserialized accounts.
+    pub accounts: &'b mut T,
+    /// Remaining accounts given but not deserialized or validated.
+    /// Be very careful when using this directly.
+    pub remaining_accounts: &'c [AccountInfo<'info>],
+    /// Bump seeds found during constraint validation. This is provided as a
+    /// convenience so that handlers don't have to recalculate bump seeds or
+    /// pass them in as arguments.
+    pub bumps: BTreeMap<String, u8>,
+} */
+struct CancelContext<'a, 'b, 'c, 'info> {
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    program_id: &'a Pubkey,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    accounts: &'b CancelContextAccounts<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    remaining_accounts: &'c [AccountInfo<'info>],
+}
+
+fn cancel(cancel_context: &CancelContext) -> Result<()> {
+    let ctx = cancel_context;
+
+    msg!("start cancel_by_initializer");
+
+    let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
+        &[
+            VAULT_AUTHORITY_PDA_SEED,
+            ctx.accounts.initializer.key().as_ref(),
+            ctx.accounts.taker.key().as_ref(),
+        ],
+        ctx.program_id,
+    );
+
+    // 追加のsolをinitializerに戻す
+    msg!(
+        "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount {}",
+        ctx.accounts
+            .escrow_account
+            .initializer_additional_sol_amount
+    );
+    msg!(
+        "ctx.accounts.escrow_account.to_account_info().lamports {}",
+        ctx.accounts
+            .escrow_account
+            .to_account_info()
+            .try_borrow_mut_lamports()?
+    );
+    msg!(
+        "ctx.accounts.initializer.lamports {}",
+        ctx.accounts.initializer.try_borrow_mut_lamports()?
+    );
+
+    // TODO: vaultの一致の確認
+
+    // NFTをinitializerに戻す
+
+    let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
+    for index in 0..initializer_nft_amount_count {
+        token::transfer(
+            ctx.accounts
+                .into_transfer_to_initializer_context(
+                    &ctx.remaining_accounts[index * 3 + 1],
+                    &ctx.remaining_accounts[index * 3],
+                )
+                .with_signer(&[&[
+                    VAULT_AUTHORITY_PDA_SEED,
+                    ctx.accounts.initializer.key().as_ref(),
+                    ctx.accounts.taker.key().as_ref(),
+                    &[vault_authority_bump],
+                ]]),
+            1,
+        )?;
+
+        // NFTのtoken accountをcloseする
+        token::close_account(
+            ctx.accounts
+                .into_close_context(&ctx.remaining_accounts[index * 3 + 1])
+                .with_signer(&[&[
+                    VAULT_AUTHORITY_PDA_SEED,
+                    ctx.accounts.initializer.key().as_ref(),
+                    ctx.accounts.taker.key().as_ref(),
+                    &[vault_authority_bump],
+                ]]),
+        )?;
+    }
+
+    msg!(
+        "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount2 {}",
+        ctx.accounts
+            .escrow_account
+            .initializer_additional_sol_amount
+    );
+    msg!(
+        "ctx.accounts.escrow_account.to_account_info().lamports2 {}",
+        ctx.accounts
+            .escrow_account
+            .to_account_info()
+            .try_borrow_mut_lamports()?
+    );
+    msg!(
+        "ctx.accounts.initializer.lamports2 {}",
+        ctx.accounts.initializer.try_borrow_mut_lamports()?
+    );
+    // 最難関： solanaのbugで金額を動かすのはinto_close_contextの後にする必要がある Ref: https://discord.com/channels/889577356681945098/889584618372734977/915190505002921994
+    let initializer_additional_sol_amount = ctx
+        .accounts
+        .escrow_account
+        .initializer_additional_sol_amount;
+    **ctx
+        .accounts
+        .escrow_account
+        .to_account_info()
+        .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
+    **ctx.accounts.initializer.try_borrow_mut_lamports()? += initializer_additional_sol_amount; // ここを減らそうとすると　 Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
+
+    msg!(
+        "ctx
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount3 {}",
+        ctx.accounts
+            .escrow_account
+            .initializer_additional_sol_amount
+    );
+    msg!(
+        "ctx.accounts.escrow_account.to_account_info().lamports3 {}",
+        ctx.accounts
+            .escrow_account
+            .to_account_info()
+            .try_borrow_mut_lamports()?
+    );
+    msg!(
+        "ctx.accounts.initializer.lamports3 {}",
+        ctx.accounts.initializer.try_borrow_mut_lamports()?
+    );
+
+    // TODO: initializer_additional_sol_amountの一致を確認
+
+    // vault_sol_accountをcloseする
+    // TODO: typescript側でチェック
+
+    msg!("end cancel_by_initializer");
+    Ok(())
+}
+
+struct CancelContextAccounts<'info> {
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    initializer: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    taker: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    vault_authority: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    escrow_account: Box<Account<'info, EscrowAccount>>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    token_program: AccountInfo<'info>,
+}
+
+trait CancelContextTrait<'info> {
+    //fn new(&'info self) -> &'info CancelContext<'_, '_, '_, 'info>;
+}
+/*
+impl<'info> Clone for CancelContextAccounts<'info> {
+    fn clone(&self) -> Self {
+        Self {
+            initializer: self.initializer.clone(),
+            taker: self.taker.clone(),
+            vault_authority: self.vault_authority.clone(),
+            escrow_account: self.escrow_account.clone(),
+            token_program: self.token_program.clone(),
+        }
+    }
+}
+
+impl<'info, T> CancelContextTrait<'info, T> for Context<'_, '_, '_, 'info, T> {
+    fn new(&self) -> CancelContext<'info, T> {
+        CancelContext {
+            accounts: self.accounts,
+            remaining_accounts: &self.remaining_accounts,
+            program_id: &self.program_id,
+        }
+    }
+}*/
+
+/*
+impl<'info> CancelContextTrait<'info> for Context<'_, '_, '_, 'info, CancelByInitializer<'info>> {
+    fn new(&self) -> &CancelContext<'_, '_, '_, 'info> {
+        &CancelContext {
+            accounts: &CancelContextAccounts {
+                initializer: self.accounts.initializer.clone(),
+                taker: self.accounts.taker.clone(),
+                vault_authority: self.accounts.vault_authority.clone(),
+                escrow_account: self.accounts.escrow_account.clone(),
+                token_program: self.accounts.token_program.clone(),
+            },
+            remaining_accounts: &self.remaining_accounts,
+            program_id: &self.program_id,
+        }
+    }
+}
+
+impl<'info> CancelContextTrait<'info> for Context<'_, '_, '_, 'info, CancelByTaker<'info>> {
+    fn new(&'_ self) -> &'_ CancelContext<'_, '_, '_, 'info> {
+        let test = CancelContextAccounts {
+            initializer: self.accounts.initializer.clone(),
+            taker: self.accounts.taker.clone(),
+            vault_authority: self.accounts.vault_authority.clone(),
+            escrow_account: self.accounts.escrow_account.clone(),
+            token_program: self.accounts.token_program.clone(),
+        };
+        let test2 = CancelContext {
+            accounts: &test,
+            remaining_accounts: &self.remaining_accounts,
+            program_id: &self.program_id,
+        };
+        return &test2;
+    }
+}
+ */
+/*
+trait CancelContextLogic {
+    fn get_size(&self) -> u64;
+}
+
+impl<CancelContextTrait> CancelContextLogic for T {
+    fn get_size(&self) -> u64 {
+        self.accounts
+    }
+}
+*/
+
 impl<'info> Initialize<'info> {
     /* ok*/
     fn into_transfer_to_pda_context(
@@ -1106,7 +1250,7 @@ impl<'info> Common<'info> for Exchange<'info> {
     }
 }
 
-impl<'info> Cancel<'info> for CancelByInitializer<'info> {
+impl<'info> Cancel<'info> for CancelContextAccounts<'info> {
     fn vault_authority(&self) -> &AccountInfo<'info> {
         return &self.vault_authority;
     }
@@ -1116,31 +1260,7 @@ impl<'info> Cancel<'info> for CancelByInitializer<'info> {
     }
 }
 
-impl<'info> Common<'info> for CancelByInitializer<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info> {
-        return &self.vault_authority;
-    }
-
-    fn initializer(&self) -> &AccountInfo<'info> {
-        return &self.initializer;
-    }
-
-    fn token_program(&self) -> &AccountInfo<'info> {
-        return &self.token_program;
-    }
-}
-
-impl<'info> Cancel<'info> for CancelByTaker<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info> {
-        return &self.vault_authority;
-    }
-
-    fn token_program(&self) -> &AccountInfo<'info> {
-        return &self.token_program;
-    }
-}
-
-impl<'info> Common<'info> for CancelByTaker<'info> {
+impl<'info> Common<'info> for CancelContextAccounts<'info> {
     fn vault_authority(&self) -> &AccountInfo<'info> {
         return &self.vault_authority;
     }
