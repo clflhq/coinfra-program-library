@@ -1,7 +1,12 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { NftBarter } from "../target/types/nft_barter";
-import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  NonceAccount,
+} from "@solana/web3.js";
 import {
   AccountLayout,
   TOKEN_PROGRAM_ID,
@@ -13,6 +18,7 @@ import {
   createInitializeAccountInstruction,
 } from "@solana/spl-token";
 import { assert } from "chai";
+import * as borsh from "borsh";
 
 describe("anchor-escrow", () => {
   // Configure the client to use the local cluster.
@@ -593,6 +599,84 @@ describe("anchor-escrow", () => {
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
+
+    class EscrowAccount {
+      initializerKey: anchor.web3.PublicKey;
+      initializerNftAmount: number;
+      initializerAdditionalSolAmount: anchor.BN;
+      takerKey: anchor.web3.PublicKey;
+      takerNftAmount: number;
+      takerAdditionalSolAmount: anchor.BN;
+      vaultAccountBump: number;
+      constructor(args: {
+        initializerKey: anchor.web3.PublicKey;
+        initializerNftAmount: number;
+        initializerAdditionalSolAmount: anchor.BN;
+        takerKey: anchor.web3.PublicKey;
+        takerNftAmount: number;
+        takerAdditionalSolAmount: anchor.BN;
+        vaultAccountBump: number;
+      }) {
+        this.initializerKey = args.initializerKey;
+        this.initializerNftAmount = args.initializerNftAmount;
+        this.initializerAdditionalSolAmount =
+          args.initializerAdditionalSolAmount;
+        this.takerKey = args.takerKey;
+        this.takerNftAmount = args.takerNftAmount;
+        this.takerAdditionalSolAmount = args.takerAdditionalSolAmount;
+        this.vaultAccountBump = args.vaultAccountBump;
+      }
+    }
+
+    const ESCROW_ACCOUNT_SCHEMA = new Map<any, any>([
+      [
+        EscrowAccount,
+        {
+          kind: "struct",
+          fields: [
+            ["initializerKey", [32]], // 最難関　nft_barter.jsonではpubkeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function
+
+            ["initializerNftAmount", "u8"],
+            ["initializerAdditionalSolAmount", "u64"],
+            ["takerKey", [32]], // 最難関　nft_barter.jsonではpubkeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function
+            ["takerNftAmount", "u8"],
+            ["takerAdditionalSolAmount", "u64"],
+            ["vaultAccountBump", "u8"],
+          ],
+        },
+      ],
+    ]);
+    const _escrowAccount100 = await provider.connection.getParsedAccountInfo(
+      escrowAccount.publicKey
+    );
+
+    console.log("_escrowAccount100", _escrowAccount100);
+    console.log(
+      "_escrowAccount100.value.data as Buffer",
+      _escrowAccount100.value.data as Buffer
+    );
+
+    const escrowAccountBuffer = _escrowAccount100.value.data as Buffer;
+    const escrowAccountBuffer2 = escrowAccountBuffer.slice(8); //　最初の8バイトはanchorの内部用に使っている
+    const escrowAccountData = borsh.deserializeUnchecked(
+      ESCROW_ACCOUNT_SCHEMA,
+      EscrowAccount,
+      escrowAccountBuffer2
+    ) as EscrowAccount;
+    console.log(
+      "escrowAccountData.initializerAdditionalSolAmount.toString()",
+      escrowAccountData.initializerAdditionalSolAmount.toString()
+    );
+    console.log(
+      "escrowAccountData.takerAdditionalSolAmount.toString()",
+      escrowAccountData.takerAdditionalSolAmount.toString()
+    );
+
+    // const _nonceAccount = NonceAccount.fromAccountData(_escrowAccount.data);
+
+    console.log("escrowAccountData", escrowAccountData);
+    // console.log("_nonceAccount", _nonceAccount); // Bufferから戻す必要あり
+
     /*
     console.log("start assertion");
     let _vault = await provider.connection.getAccountInfo(vault_account_pda);
