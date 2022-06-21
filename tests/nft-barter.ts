@@ -634,11 +634,11 @@ describe("anchor-escrow", () => {
         {
           kind: "struct",
           fields: [
-            ["initializerKey", [32]], // 最難関　nft_barter.jsonではpubkeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function
+            ["initializerKey", [32]], // 最難関　nft_barter.jsonではpublicKeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function borshのextendsをmetaplexみたいに書けばpublicKeyにしても動くはず
 
             ["initializerNftAmount", "u8"],
             ["initializerAdditionalSolAmount", "u64"],
-            ["takerKey", [32]], // 最難関　nft_barter.jsonではpubkeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function
+            ["takerKey", [32]], // 最難関　nft_barter.jsonではpublicKeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function　borshのextendsをmetaplexみたいに書けばpublicKeyにしても動くはず
             ["takerNftAmount", "u8"],
             ["takerAdditionalSolAmount", "u64"],
             ["vaultAccountBump", "u8"],
