@@ -269,7 +269,7 @@ pub mod nft_barter {
         ctx.accounts.escrow_account.taker_nft_amount = taker_nft_amount;
         ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
 
-        // ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
+        //ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps.clone();
         // ctx.accounts.vault_sol_account.bump = *ctx.bumps.get("vault_sol_account").unwrap();
         /*
         msg!(
@@ -511,9 +511,9 @@ pub mod nft_barter {
 
         msg!(
             "ctx
-        .accounts
-        .escrow_account
-        .initializer_additional_sol_amount {}",
+            .accounts
+            .escrow_account
+            .initializer_additional_sol_amount {}",
             ctx.accounts
                 .escrow_account
                 .initializer_additional_sol_amount
@@ -721,7 +721,7 @@ pub struct InitializeForTest<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>)]
 pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
@@ -755,7 +755,16 @@ pub struct Initialize<'info> {
         )]
         pub vault_sol_account: Account<'info, VaultSolAccount>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2　手数料と追加のsolを入れる箱 yawwwでも取引ごとに作られている　ここBoxにしてもError: 3007: The given account is owned by a different program than expected
     */
-    #[account(zero)]
+    // account(zero)でuninitializedを保証できるので、ts側でinitしようとするとなぜかError: 3003: Failed to deserialize the account　エラー　調べる限りspace問題なのでrustでspaceを指定することで解決
+    #[account(init, payer = initializer, space = 8 // internal anchor discriminator 
+        + 32 // initializerKey
+        + 1   // initializerNftAmount
+        + 8   // initializerAdditionalSolAmount
+        + 32  // takerKey
+        + 1  // takerNftAmount
+        + 8  // takerAdditionalSolAmount
+        + 4 + vault_account_bumps.len() // vault_account_bumps vec
+    )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -913,16 +922,18 @@ pub struct EscrowAccount {
     // pub taker_amount: u64,
     pub taker_nft_amount: u8,
     pub taker_additional_sol_amount: u64,
-    pub vault_account_bump: u8,
+    // pub vault_account_bump: u8,
     // pub vault_sol_account_bump: u8,
-    // pub vault_account_bumps: Vec<u8>,
+    pub vault_account_bumps: Vec<u8>,
 }
 
+/*
 #[account]
 #[derive(Default)]
 pub struct VaultSolAccount {
     pub bump: u8,
 }
+*/
 
 /*
 Util

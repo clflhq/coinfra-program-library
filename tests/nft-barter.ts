@@ -584,7 +584,7 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          // await program.account.escrowAccount.createInstruction(escrowAccount), // なぜかts側でinitしようとすると抜かすとError: 3003: Failed to deserialize the account　なのでrustで実行　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
           // createTempTokenAccountAIx, RUSTに移管
           //initTempAccountAIx,
           //createTempTokenAccountBIx,
@@ -592,7 +592,7 @@ describe("anchor-escrow", () => {
         ],
         remainingAccounts,
         signers: [
-          escrowAccount,
+          escrowAccount, // rust側でinitするために必要
           initializerMainAccount,
           // vaultAccountA,
           // vaultAccountB,
@@ -1214,7 +1214,7 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
           // createTempTokenAccountAIx, RUSTに移管
           //initTempAccountAIx,
           //createTempTokenAccountBIx,
@@ -1488,7 +1488,7 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         },
         instructions: [
-          await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
+          // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
           // createTempTokenAccountAIx, RUSTに移管
           //initTempAccountAIx,
           //createTempTokenAccountBIx,
