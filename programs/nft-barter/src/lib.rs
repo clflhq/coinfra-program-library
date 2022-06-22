@@ -102,6 +102,11 @@ pub mod nft_barter {
 
             // NFTをちゃんと持っていることの検証
             require_eq!(account.amount, 1, MyError::NotFoundNft);
+
+            ctx.accounts
+                .escrow_account
+                .taker_nft_token_accounts
+                .push(ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2].key());
         }
 
         /* ok */
@@ -255,6 +260,11 @@ pub mod nft_barter {
                     .into_transfer_to_pda_context(&token_account, &vault_account),
                 1,
             )?;
+
+            ctx.accounts
+                .escrow_account
+                .initializer_nft_token_accounts
+                .push(token_account.key());
         }
 
         /* ok*/
@@ -269,7 +279,8 @@ pub mod nft_barter {
         ctx.accounts.escrow_account.taker_nft_amount = taker_nft_amount;
         ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
 
-        //ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps.clone();
+        ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
+
         // ctx.accounts.vault_sol_account.bump = *ctx.bumps.get("vault_sol_account").unwrap();
         /*
         msg!(
@@ -758,14 +769,17 @@ pub struct Initialize<'info> {
     // account(zero)でuninitializedを保証できるので、ts側でinitしようとするとなぜかError: 3003: Failed to deserialize the account　エラー　調べる限りspace問題なのでrustでspaceを指定することで解決
     #[account(init, payer = initializer, space = 8 // internal anchor discriminator 
         + 32 // initializerKey
-        + 1   // initializerNftAmount
-        + 8   // initializerAdditionalSolAmount
-        + 32  // takerKey
-        + 1  // takerNftAmount
-        + 8  // takerAdditionalSolAmount
+        + 1 // initializerNftAmount
+        + 8 // initializerAdditionalSolAmount
+        + 4 + 32 * initializer_nft_amount as usize // initializerNftTokenAccounts
+        + 32 // takerKey
+        + 1 // takerNftAmount
+        + 8 // takerAdditionalSolAmount
+        + 4 + 32 * taker_nft_amount as usize // takerNftTokenAccounts
         + 4 + vault_account_bumps.len() // vault_account_bumps vec
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2
+
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     /// CHECK: This is not dangerous because we don't read or write from this account
@@ -918,10 +932,12 @@ pub struct EscrowAccount {
     //pub initializer_amount: u64,
     pub initializer_nft_amount: u8,
     pub initializer_additional_sol_amount: u64,
+    pub initializer_nft_token_accounts: Vec<Pubkey>,
     pub taker_key: Pubkey,
     // pub taker_amount: u64,
     pub taker_nft_amount: u8,
     pub taker_additional_sol_amount: u64,
+    pub taker_nft_token_accounts: Vec<Pubkey>,
     // pub vault_account_bump: u8,
     // pub vault_sol_account_bump: u8,
     pub vault_account_bumps: Vec<u8>,

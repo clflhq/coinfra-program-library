@@ -604,26 +604,34 @@ describe("anchor-escrow", () => {
       initializerKey: anchor.web3.PublicKey;
       initializerNftAmount: number;
       initializerAdditionalSolAmount: anchor.BN;
+      initializerNftTokenAccounts: [anchor.web3.PublicKey];
       takerKey: anchor.web3.PublicKey;
       takerNftAmount: number;
       takerAdditionalSolAmount: anchor.BN;
+      takerNftTokenAccounts: [anchor.web3.PublicKey];
       vaultAccountBump: number;
+
+      // constructorないと値が入らないので必須
       constructor(args: {
         initializerKey: anchor.web3.PublicKey;
         initializerNftAmount: number;
         initializerAdditionalSolAmount: anchor.BN;
+        initializerNftTokenAccounts: [anchor.web3.PublicKey];
         takerKey: anchor.web3.PublicKey;
         takerNftAmount: number;
         takerAdditionalSolAmount: anchor.BN;
+        takerNftTokenAccounts: [anchor.web3.PublicKey];
         vaultAccountBump: number;
       }) {
         this.initializerKey = args.initializerKey;
         this.initializerNftAmount = args.initializerNftAmount;
         this.initializerAdditionalSolAmount =
           args.initializerAdditionalSolAmount;
+        this.initializerNftTokenAccounts = args.initializerNftTokenAccounts;
         this.takerKey = args.takerKey;
         this.takerNftAmount = args.takerNftAmount;
         this.takerAdditionalSolAmount = args.takerAdditionalSolAmount;
+        this.takerNftTokenAccounts = args.takerNftTokenAccounts;
         this.vaultAccountBump = args.vaultAccountBump;
       }
     }
@@ -638,9 +646,11 @@ describe("anchor-escrow", () => {
 
             ["initializerNftAmount", "u8"],
             ["initializerAdditionalSolAmount", "u64"],
+            ["initializerNftTokenAccounts", [[32]]],
             ["takerKey", [32]], // 最難関　nft_barter.jsonではpublicKeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function　borshのextendsをmetaplexみたいに書けばpublicKeyにしても動くはず
             ["takerNftAmount", "u8"],
             ["takerAdditionalSolAmount", "u64"],
+            ["takerNftTokenAccounts", [[32]]],
             ["vaultAccountBump", "u8"],
           ],
         },
@@ -663,6 +673,11 @@ describe("anchor-escrow", () => {
       EscrowAccount,
       escrowAccountBuffer2
     ) as EscrowAccount;
+
+    // const _nonceAccount = NonceAccount.fromAccountData(_escrowAccount.data);
+
+    console.log("escrowAccountData", escrowAccountData);
+
     console.log(
       "escrowAccountData.initializerAdditionalSolAmount.toString()",
       escrowAccountData.initializerAdditionalSolAmount.toString()
@@ -672,9 +687,6 @@ describe("anchor-escrow", () => {
       escrowAccountData.takerAdditionalSolAmount.toString()
     );
 
-    // const _nonceAccount = NonceAccount.fromAccountData(_escrowAccount.data);
-
-    console.log("escrowAccountData", escrowAccountData);
     // console.log("_nonceAccount", _nonceAccount); // Bufferから戻す必要あり
 
     /*
