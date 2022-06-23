@@ -628,7 +628,7 @@ describe("anchor-escrow", () => {
       )
     );
 
-    // escrowにSOLが入っているか確認
+    // SOLの移動検証
     const _escrowAccountInfo = await provider.connection.getParsedAccountInfo(
       escrowAccount.publicKey
     );
@@ -767,49 +767,25 @@ describe("anchor-escrow", () => {
     /* escrowに入っているお金を抜けないかテスト
       programでやると抜ける
       tsでやろうとすると次のエラー Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: invalid program argument
-    await provider.send(
-      (() => {
-        const tx = new Transaction();
-        tx.add(
-          SystemProgram.transfer({
-            fromPubkey: escrowAccount.publicKey,
-            toPubkey: takerMainAccount.publicKey,
-            lamports: 100,
-          })
-        );
-        return tx;
-      })(),
-      [escrowAccount]
-    );
-
-    const beforeInitializer = await provider.connection.getAccountInfo(
-      initializerMainAccount.publicKey
-    );
-    console.log("beforeInitializer.lamports", beforeInitializer.lamports);
-    await program.rpc.exchange2(
-      new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
-      new anchor.BN(takerAdditionalSolAmount),
-      2,
-      3,
-      {
-        accounts: {
-          //takerDepositTokenAccount: takerTokenAccountB,
-          //takerReceiveTokenAccount: takerTokenAccountA,
-          //initializerDepositTokenAccount: initializerTokenAccountA,
-          //initializerReceiveTokenAccount: initializerTokenAccountB,
-          taker: takerMainAccount.publicKey,
-          vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
-          initializer: initializerMainAccount.publicKey,
-          escrowAccount: escrowAccount.publicKey,
-          vaultAuthority: vaultAuthorityPda,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        },
-        remainingAccounts: remainingAccounts,
-        signers: [initializerMainAccount],
-      }
-    );
-    */
+      */
+    try {
+      await provider.send(
+        (() => {
+          const tx = new Transaction();
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: escrowAccount.publicKey,
+              toPubkey: takerMainAccount.publicKey,
+              lamports: initializerAdditionalSolAmount,
+            })
+          );
+          return tx;
+        })(),
+        [escrowAccount]
+      );
+    } catch (err) {
+      assert.ok(err !== null);
+    }
 
     const beforeInitializerAccounts =
       await provider.connection.getParsedTokenAccountsByOwner(
@@ -997,6 +973,31 @@ describe("anchor-escrow", () => {
       vaultAuthorityPda
     );
     assert.ok(_vaultAuthority.value === null);
+
+    // SOLの移動検証
+    const _initializerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        initializerMainAccount.publicKey
+      );
+    console.log(
+      "_initializerMainAccountInfo.value.lamports",
+      _initializerMainAccountInfo.value.lamports
+    );
+    console.log("initializerStartSolAmount", initializerStartSolAmount);
+
+    const _takerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        takerMainAccount.publicKey
+      );
+    console.log(
+      "_takerMainAccountInfo.value.lamports",
+      _takerMainAccountInfo.value.lamports
+    );
+    console.log("takerStartSolAmount", takerStartSolAmount);
+
+    assert.ok(
+      _initializerMainAccountInfo.value.lamports >= initializerStartSolAmount
+    );
   });
 
   it("Initialize escrow and cancel escrow by A", async () => {
