@@ -1,24 +1,16 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { NftBarter } from "../target/types/nft_barter";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import {
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  NonceAccount,
-} from "@solana/web3.js";
-import {
-  AccountLayout,
   TOKEN_PROGRAM_ID,
-  setAuthority,
   createMint,
   mintTo,
   getOrCreateAssociatedTokenAccount,
   getAccount,
-  createInitializeAccountInstruction,
+  Account,
 } from "@solana/spl-token";
-import { assert } from "chai";
-import * as borsh from "borsh";
+import { assert, expect } from "chai";
 
 describe("anchor-escrow", () => {
   // Configure the client to use the local cluster.
@@ -27,34 +19,29 @@ describe("anchor-escrow", () => {
 
   const program = anchor.workspace.NftBarter as Program<NftBarter>;
 
-  let mintA = null;
-  let mintB = null;
-  let mintC = null;
-  let mintD = null;
-  let mintE = null;
+  let mintA: anchor.web3.PublicKey = null;
+  let mintB: anchor.web3.PublicKey = null;
+  let mintC: anchor.web3.PublicKey = null;
+  let mintD: anchor.web3.PublicKey = null;
+  let mintE: anchor.web3.PublicKey = null;
 
-  let initializerTokenAccountA = null;
-  let initializerTokenAccountB = null;
-  let initializerTokenAccountC = null;
-  let initializerTokenAccountD = null;
-  let initializerTokenAccountE = null;
+  let initializerTokenAccountA: Account = null;
+  let initializerTokenAccountB: Account = null;
+  let initializerTokenAccountC: Account = null;
+  let initializerTokenAccountD: Account = null;
+  let initializerTokenAccountE: Account = null;
 
-  let takerTokenAccountA = null;
-  let takerTokenAccountB = null;
-  let takerTokenAccountC = null;
-  let takerTokenAccountD = null;
-  let takerTokenAccountE = null;
-
-  let vaultAccountPda: anchor.web3.PublicKey = null; // テスト用　使っていない
-  let vaultAccountBump: number = null;
+  let takerTokenAccountA: Account = null;
+  let takerTokenAccountB: Account = null;
+  let takerTokenAccountC: Account = null;
+  let takerTokenAccountD: Account = null;
+  let takerTokenAccountE: Account = null;
 
   let vaultAccountPdaA: anchor.web3.PublicKey = null; // initializerがmintAを預ける用のvault vaultはPDAにする必要がない
   let vaultAccountBumpA: number = null;
-  let vaultAccountA: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
   let vaultAccountPdaB: anchor.web3.PublicKey = null; // initializerがmintBを預ける用のvault
   let vaultAccountBumpB: number = null;
-  let vaultAccountB: anchor.web3.Keypair = anchor.web3.Keypair.generate();
 
   let vaultAccountPdaC: anchor.web3.PublicKey = null; // initializerがmintCを預ける用のvault
   let vaultAccountBumpC: number = null;
@@ -65,14 +52,14 @@ describe("anchor-escrow", () => {
   let vaultAccountPdaE: anchor.web3.PublicKey = null; // initializerがmintEを預ける用のvault
   let vaultAccountBumpE: number = null;
 
-  // let vaultSolAccountPda: anchor.web3.PublicKey = null;
-  // let vaultSolAccountBump: number = null;
-
   let vaultAuthorityPda: anchor.web3.PublicKey = null;
   let vaultAuthorityBump: number = null;
 
-  const initializerStartSolAmount = 2_000_000_000;
-  const takerStartSolAmount = 5_000_000_000;
+  let initializerNftAmount = 2;
+  let takerNftAmount = 3;
+
+  const initializerStartSolAmount = 2_000_000_000; // lamport
+  const takerStartSolAmount = 5_000_000_000; // lamport
   const initializerAdditionalSolAmount = 500_000_000; // lamport
   const takerAdditionalSolAmount = 1_000_000_000; // lamport
 
@@ -221,8 +208,6 @@ describe("anchor-escrow", () => {
       takerMainAccount.publicKey
     );
 
-    // 持っていないNFTのtoken accountはrust側で確認して作る
-
     console.log("start mintTo");
 
     await mintTo(
@@ -233,16 +218,6 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    /*　cancel時にmintToするのでコメントアウト
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintA, // Account
-      mintAuthority, // Current authority
-      0, // Authority type: "0" represents Mint Tokens
-      null // Setting the new Authority to null
-    );
-    */
 
     await mintTo(
       provider.connection,
@@ -252,16 +227,6 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    /* cancel時にmintToするのでコメントアウト
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintB, // Account
-      mintAuthority, // Current authority
-      0, // Authority type: "0" represents Mint Tokens
-      null // Setting the new Authority to null
-    );
-    */
 
     await mintTo(
       provider.connection,
@@ -271,16 +236,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    /* cancel時にmintToするのでコメントアウト
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintC, // Account
-      mintAuthority, // Current authority
-      0, // Authority type: "0" represents Mint Tokens
-      null // Setting the new Authority to null
-    );
-*/
+
     await mintTo(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -289,16 +245,7 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    /* cancel時にmintToするのでコメントアウト
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintD, // Account
-      mintAuthority, // Current authority
-      0, // Authority type: "0" represents Mint Tokens
-      null // Setting the new Authority to null
-    );
-*/
+
     await mintTo(
       provider.connection,
       payer, // Payer of the transaction fees
@@ -307,70 +254,73 @@ describe("anchor-escrow", () => {
       mintAuthority, // Minting authority
       1 // Amount to mint
     );
-    /* cancel時にmintToするのでコメントアウト
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintE, // Account
-      mintAuthority, // Current authority
-      0, // Authority type: "0" represents Mint Tokens
-      null // Setting the new Authority to null
-    );
-*/
-    console.log("start assertion");
-    console.log(initializerTokenAccountA);
-    console.log(initializerTokenAccountA.amount);
 
-    // 以下でNFT数を検証したほうがよさそう？
-    // const tokens = await connection.getParsedTokenAccountsByOwner(owner, {
-    //  programId: TOKEN_PROGRAM_ID,
-    // });
+    console.log("start assertion");
+
+    // check token accounts
     let _initializerTokenAccountA = await getAccount(
       provider.connection,
       initializerTokenAccountA.address
     );
-
-    console.log(_initializerTokenAccountA);
-    console.log(Number(_initializerTokenAccountA.amount));
-    assert.ok(Number(_initializerTokenAccountA.amount) == 1);
+    assert.ok(Number(_initializerTokenAccountA.amount) === 1);
 
     let _initializerTokenAccountB = await getAccount(
       provider.connection,
       initializerTokenAccountB.address
     );
-    assert.ok(Number(_initializerTokenAccountB.amount) == 1);
+    assert.ok(Number(_initializerTokenAccountB.amount) === 1);
+
+    let _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 0);
+
+    let _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 0);
+
+    let _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 0);
+
+    let _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 0);
+
+    let _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 0);
 
     let _takerTokenAccountC = await getAccount(
       provider.connection,
       takerTokenAccountC.address
     );
-    assert.ok(Number(_takerTokenAccountC.amount) == 1);
+    assert.ok(Number(_takerTokenAccountC.amount) === 1);
 
     let _takerTokenAccountD = await getAccount(
       provider.connection,
       takerTokenAccountD.address
     );
-    assert.ok(Number(_takerTokenAccountD.amount) == 1);
+    assert.ok(Number(_takerTokenAccountD.amount) === 1);
 
     let _takerTokenAccountE = await getAccount(
       provider.connection,
       takerTokenAccountE.address
     );
-    assert.ok(Number(_takerTokenAccountE.amount) == 1);
-
-    // へんなaddressをtoken account addressでわたしたときの異常系チェック
+    assert.ok(Number(_takerTokenAccountE.amount) === 1);
   });
 
   it("Initialize escrow", async () => {
     console.log("start creating PDAs");
-
-    const [_vaultAccountPda, _vaultAccountBump] =
-      await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("vault-account-test"))],
-        program.programId
-      );
-    vaultAccountPda = _vaultAccountPda;
-    vaultAccountBump = _vaultAccountBump;
 
     const [_vaultAccountPdaA, _vaultAccountBumpA] =
       await PublicKey.findProgramAddress(
@@ -386,39 +336,6 @@ describe("anchor-escrow", () => {
     console.log("vaultAccountPdaA", vaultAccountPdaA);
     console.log("vaultAccountBumpA", vaultAccountBumpA);
 
-    /* 以下でも動くがrustに移管する 
-    const createTempTokenAccountAIx = SystemProgram.createAccount({
-      programId: TOKEN_PROGRAM_ID,
-      space: AccountLayout.span,
-      lamports: await provider.connection.getMinimumBalanceForRentExemption(
-        AccountLayout.span
-      ),
-      fromPubkey: initializerMainAccount.publicKey,
-      newAccountPubkey: vaultAccountA.publicKey,
-    });
-    const initTempAccountAIx = createInitializeAccountInstruction(
-      vaultAccountA.publicKey,
-      mintA,
-      initializerMainAccount.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-*/
-
-    /*
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      vaultAccountPdaA, // Account
-      anchor.web3.SystemProgram.programId, // Current authority
-      2, // Authority type: "2" represents Account Owner
-      initializerMainAccount.publicKey // Setting the new Authority to null
-    );
-    */
-
-    // 以下だとデータ取れない
-    // let _vault = await provider.connection.getAccountInfo(vaultAccountPdaA);
-    // console.log("_vault", _vault);
-
     const [_vaultAccountPdaB, _vaultAccountBumpB] =
       await PublicKey.findProgramAddress(
         [
@@ -433,52 +350,9 @@ describe("anchor-escrow", () => {
     console.log("vaultAccountPdaB", vaultAccountPdaB);
     console.log("vaultAccountBumpB", vaultAccountBumpB);
 
-    /*
-    const createTempTokenAccountBIx = SystemProgram.createAccount({
-      programId: TOKEN_PROGRAM_ID,
-      space: AccountLayout.span,
-      lamports: await provider.connection.getMinimumBalanceForRentExemption(
-        AccountLayout.span
-      ),
-      fromPubkey: initializerMainAccount.publicKey,
-      newAccountPubkey: vaultAccountB.publicKey,
-    });
-    const initTempAccountBIx = createInitializeAccountInstruction(
-      vaultAccountB.publicKey,
-      mintB,
-      initializerMainAccount.publicKey,
-      TOKEN_PROGRAM_ID
-    );
-*/
-    /*
-    await setAuthority(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      vaultAccountPdaB, // Account
-      anchor.web3.SystemProgram.programId, // Current authority
-      2, // Authority type: "2" represents Account Owner
-      initializerMainAccount.publicKey // Setting the new Authority to null
-    );
-    */
-
     const vaultAccountBumps: number[] = [vaultAccountBumpA, vaultAccountBumpB];
     console.log("vaultAccountBumps", vaultAccountBumps);
 
-    /*
-    const [_vaultSolAccountPda, _vaultSolAccountBump] =
-      await PublicKey.findProgramAddress(
-        [
-          anchor.utils.bytes.utf8.encode("vault-sol-account"),
-          initializerMainAccount.publicKey.toBuffer(),
-          takerMainAccount.publicKey.toBuffer(),
-        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
-        program.programId
-      );
-    vaultSolAccountPda = _vaultSolAccountPda;
-    vaultSolAccountBump = _vaultSolAccountBump;
-    console.log("vaultSolAccountPda", vaultSolAccountPda); // 毎回まったく同じPDAが生成される　programID変えても同じ
-    console.log("vaultSolAccountBump", vaultSolAccountBump); // 毎回まったく同じPDAが生成される　programID変えても同じ
-*/
     const [_vaultAuthorityPda, _vaultAuthorityBump] =
       await PublicKey.findProgramAddress(
         [
@@ -494,25 +368,20 @@ describe("anchor-escrow", () => {
     console.log("vaultAuthorityBump", vaultAuthorityBump);
 
     console.log("start initialize");
-    console.log(
-      "initializerTokenAccountA.address",
-      initializerTokenAccountA.address
-    );
-
-    console.log("mintA", mintA);
-    console.log("mintB", mintB);
 
     // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
     // writebleである必要があるかどうかは不明？
     const remainingAccounts = [];
     remainingAccounts.push({
       pubkey: initializerTokenAccountA.address,
-      isWritable: true,
+      isWritable: true, // falseにすると Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
+
       isSigner: false,
     });
     remainingAccounts.push({
       pubkey: vaultAccountPdaA, //vaultAccountA.publicKeyでも動くがPDAに移管
-      isWritable: true,
+      isWritable: true, // falseにすると Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
+
       isSigner: false,
     });
     remainingAccounts.push({
@@ -537,7 +406,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: takerTokenAccountC.address,
-      isWritable: true,
+      isWritable: false,
       isSigner: false,
     });
     remainingAccounts.push({
@@ -547,7 +416,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: takerTokenAccountD.address,
-      isWritable: true,
+      isWritable: false,
       isSigner: false,
     });
     remainingAccounts.push({
@@ -557,7 +426,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: takerTokenAccountE.address,
-      isWritable: true,
+      isWritable: false,
       isSigner: false,
     });
     remainingAccounts.push({
@@ -569,159 +438,205 @@ describe("anchor-escrow", () => {
     await program.rpc.initialize(
       new anchor.BN(initializerAdditionalSolAmount),
       new anchor.BN(takerAdditionalSolAmount),
-      2,
-      3,
+      initializerNftAmount,
+      takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          // vaultAccount: vaultAccountPda,
-          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        instructions: [
-          // await program.account.escrowAccount.createInstruction(escrowAccount), // なぜかts側でinitしようとすると抜かすとError: 3003: Failed to deserialize the account　なのでrustで実行　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
-          // createTempTokenAccountAIx, RUSTに移管
-          //initTempAccountAIx,
-          //createTempTokenAccountBIx,
-          // initTempAccountBIx,
-        ],
+
         remainingAccounts,
         signers: [
-          escrowAccount, // rust側でinitするために必要
+          escrowAccount, // rust側でinitするために必要　escrowAccount抜かすとError: Signature verification failed
           initializerMainAccount,
-          // vaultAccountA,
-          // vaultAccountB,
-        ], // escrowAccount抜かすとError: Signature verification failed
+        ],
       }
     );
 
-    class EscrowAccount {
-      initializerKey: anchor.web3.PublicKey;
-      initializerNftAmount: number;
-      initializerAdditionalSolAmount: anchor.BN;
-      initializerNftTokenAccounts: [anchor.web3.PublicKey];
-      takerKey: anchor.web3.PublicKey;
-      takerNftAmount: number;
-      takerAdditionalSolAmount: anchor.BN;
-      takerNftTokenAccounts: [anchor.web3.PublicKey];
-      vaultAccountBump: number;
-
-      // constructorないと値が入らないので必須
-      constructor(args: {
-        initializerKey: anchor.web3.PublicKey;
-        initializerNftAmount: number;
-        initializerAdditionalSolAmount: anchor.BN;
-        initializerNftTokenAccounts: [anchor.web3.PublicKey];
-        takerKey: anchor.web3.PublicKey;
-        takerNftAmount: number;
-        takerAdditionalSolAmount: anchor.BN;
-        takerNftTokenAccounts: [anchor.web3.PublicKey];
-        vaultAccountBump: number;
-      }) {
-        this.initializerKey = args.initializerKey;
-        this.initializerNftAmount = args.initializerNftAmount;
-        this.initializerAdditionalSolAmount =
-          args.initializerAdditionalSolAmount;
-        this.initializerNftTokenAccounts = args.initializerNftTokenAccounts;
-        this.takerKey = args.takerKey;
-        this.takerNftAmount = args.takerNftAmount;
-        this.takerAdditionalSolAmount = args.takerAdditionalSolAmount;
-        this.takerNftTokenAccounts = args.takerNftTokenAccounts;
-        this.vaultAccountBump = args.vaultAccountBump;
-      }
-    }
-
-    const ESCROW_ACCOUNT_SCHEMA = new Map<any, any>([
-      [
-        EscrowAccount,
-        {
-          kind: "struct",
-          fields: [
-            ["initializerKey", [32]], // 最難関　nft_barter.jsonではpublicKeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function borshのextendsをmetaplexみたいに書けばpublicKeyにしても動くはず
-
-            ["initializerNftAmount", "u8"],
-            ["initializerAdditionalSolAmount", "u64"],
-            ["initializerNftTokenAccounts", [[32]]],
-            ["takerKey", [32]], // 最難関　nft_barter.jsonではpublicKeyだが、[32]にしないとTypeError: reader[capitalizeFirstLetter(...)] is not a function　borshのextendsをmetaplexみたいに書けばpublicKeyにしても動くはず
-            ["takerNftAmount", "u8"],
-            ["takerAdditionalSolAmount", "u64"],
-            ["takerNftTokenAccounts", [[32]]],
-            ["vaultAccountBump", "u8"],
-          ],
-        },
-      ],
-    ]);
-    const _escrowAccount100 = await provider.connection.getParsedAccountInfo(
-      escrowAccount.publicKey
-    );
-
-    console.log("_escrowAccount100", _escrowAccount100);
-    console.log(
-      "_escrowAccount100.value.data as Buffer",
-      _escrowAccount100.value.data as Buffer
-    );
-
-    const escrowAccountBuffer = _escrowAccount100.value.data as Buffer;
-    const escrowAccountBuffer2 = escrowAccountBuffer.slice(8); //　最初の8バイトはanchorの内部用に使っている
-    const escrowAccountData = borsh.deserializeUnchecked(
-      ESCROW_ACCOUNT_SCHEMA,
-      EscrowAccount,
-      escrowAccountBuffer2
-    ) as EscrowAccount;
-
-    // const _nonceAccount = NonceAccount.fromAccountData(_escrowAccount.data);
-
-    console.log("escrowAccountData", escrowAccountData);
-
-    console.log(
-      "escrowAccountData.initializerAdditionalSolAmount.toString()",
-      escrowAccountData.initializerAdditionalSolAmount.toString()
-    );
-    console.log(
-      "escrowAccountData.takerAdditionalSolAmount.toString()",
-      escrowAccountData.takerAdditionalSolAmount.toString()
-    );
-
-    // console.log("_nonceAccount", _nonceAccount); // Bufferから戻す必要あり
-
-    /*
     console.log("start assertion");
-    let _vault = await provider.connection.getAccountInfo(vault_account_pda);
-    console.log("_vault.owner", _vault.owner);
-    console.log("vault_authority_pda", vault_authority_pda);
 
+    // Check token accounts
+    let _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    let _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    let _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 0);
+
+    let _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 0);
+
+    let _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 0);
+
+    let _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 0);
+
+    let _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 0);
+
+    let _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 1);
+
+    let _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 1);
+
+    let _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 1);
+
+    // Check vault
+    const _vaultA = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaA
+    );
+    const _vaultParsedDataA = _vaultA.value
+      .data as anchor.web3.ParsedAccountData;
+    assert.ok(_vaultA.value.owner.equals(TOKEN_PROGRAM_ID));
+    assert.ok(
+      new PublicKey(_vaultParsedDataA.parsed.info.owner).equals(
+        vaultAuthorityPda
+      )
+    );
+    assert.ok(Number(_vaultParsedDataA.parsed.info.tokenAmount.amount) === 1);
+
+    const _vaultB = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaB
+    );
+    const _vaultParsedDataB = _vaultB.value
+      .data as anchor.web3.ParsedAccountData;
+    assert.ok(_vaultB.value.owner.equals(TOKEN_PROGRAM_ID));
+    assert.ok(
+      new PublicKey(_vaultParsedDataB.parsed.info.owner).equals(
+        vaultAuthorityPda
+      )
+    );
+    assert.ok(Number(_vaultParsedDataB.parsed.info.tokenAmount.amount) === 1);
+
+    // Check the escrowAccount
     let _escrowAccount = await program.account.escrowAccount.fetch(
       escrowAccount.publicKey
     );
 
-    // Check that the new owner is the PDA.
-    assert.ok(_vault.owner.equals(vault_authority_pda));
-
-    // Check that the values in the escrow account match what we expect.
     assert.ok(
       _escrowAccount.initializerKey.equals(initializerMainAccount.publicKey)
-    );*/
+    );
+    assert.ok(_escrowAccount.initializerNftAmount === initializerNftAmount);
+    assert.ok(
+      _escrowAccount.initializerAdditionalSolAmount.toNumber() ===
+        initializerAdditionalSolAmount
+    );
+    assert.ok(
+      _escrowAccount.initializerNftTokenAccounts.length === initializerNftAmount
+    );
+    const initializerNftTokenAccountAddresses =
+      _escrowAccount.initializerNftTokenAccounts.map(
+        (initializerNftTokenAccount) => initializerNftTokenAccount.toBase58()
+      );
+    assert.include(
+      initializerNftTokenAccountAddresses,
+      initializerTokenAccountA.address.toBase58()
+    );
+    assert.include(
+      initializerNftTokenAccountAddresses,
+      initializerTokenAccountB.address.toBase58()
+    );
+    assert.notInclude(
+      initializerNftTokenAccountAddresses,
+      initializerTokenAccountC.address.toBase58()
+    );
+    assert.notInclude(
+      initializerNftTokenAccountAddresses,
+      initializerTokenAccountD.address.toBase58()
+    );
+    assert.notInclude(
+      initializerNftTokenAccountAddresses,
+      initializerTokenAccountE.address.toBase58()
+    );
 
-    /* NFTの数をチェック
+    assert.ok(_escrowAccount.takerKey.equals(takerMainAccount.publicKey));
+    assert.ok(_escrowAccount.takerNftAmount === takerNftAmount);
     assert.ok(
-      _escrowAccount.initializerDepositTokenAccount.equals(
-        initializerTokenAccountA
+      _escrowAccount.takerAdditionalSolAmount.toNumber() ===
+        takerAdditionalSolAmount
+    );
+    assert.ok(_escrowAccount.takerNftTokenAccounts.length === takerNftAmount);
+    const takerNftTokenAccountAddresses =
+      _escrowAccount.takerNftTokenAccounts.map((takerNftTokenAccount) =>
+        takerNftTokenAccount.toBase58()
+      );
+    assert.notInclude(
+      takerNftTokenAccountAddresses,
+      takerTokenAccountA.address.toBase58()
+    );
+    assert.notInclude(
+      takerNftTokenAccountAddresses,
+      takerTokenAccountB.address.toBase58()
+    );
+    assert.include(
+      takerNftTokenAccountAddresses,
+      takerTokenAccountC.address.toBase58()
+    );
+    assert.include(
+      takerNftTokenAccountAddresses,
+      takerTokenAccountD.address.toBase58()
+    );
+    assert.include(
+      takerNftTokenAccountAddresses,
+      takerTokenAccountE.address.toBase58()
+    );
+
+    assert.ok(
+      (_escrowAccount.vaultAccountBumps as Buffer).equals(
+        Buffer.from(vaultAccountBumps)
       )
     );
-    assert.ok(
-      _escrowAccount.initializerReceiveTokenAccount.equals(
-        initializerTokenAccountB
-      )
+
+    // escrowにSOLが入っているか確認
+    const _escrowAccountInfo = await provider.connection.getParsedAccountInfo(
+      escrowAccount.publicKey
     );
-    */
+    assert.ok(
+      _escrowAccountInfo.value.lamports >= initializerAdditionalSolAmount
+    );
 
     // 連続してinitializeしたときのテスト
-
     // 同じ組み合わせのinitializer, takerで二重に取引できない
   });
 
@@ -731,12 +646,22 @@ describe("anchor-escrow", () => {
 
     const remainingAccounts = [];
     remainingAccounts.push({
+      pubkey: initializerTokenAccountA.address,
+      isWritable: false, // falseでOK
+      isSigner: false,
+    });
+    remainingAccounts.push({
       pubkey: vaultAccountPdaA,
-      isWritable: true,
+      isWritable: true, // trueでないと駄目
       isSigner: false,
     });
     remainingAccounts.push({
       pubkey: mintA, //vaultAccountA.publicKeyでも動くがPDAに移管
+      isWritable: false,
+      isSigner: false,
+    });
+    remainingAccounts.push({
+      pubkey: initializerTokenAccountB.address,
       isWritable: false,
       isSigner: false,
     });
@@ -752,7 +677,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: initializerTokenAccountC.address,
-      isWritable: true,
+      isWritable: true, // false だと駄目
       isSigner: false,
     });
     remainingAccounts.push({
@@ -782,7 +707,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: takerTokenAccountA.address,
-      isWritable: true,
+      isWritable: true, // falseだと駄目
       isSigner: false,
     });
     remainingAccounts.push({
@@ -802,7 +727,7 @@ describe("anchor-escrow", () => {
     });
     remainingAccounts.push({
       pubkey: takerTokenAccountC.address,
-      isWritable: true,
+      isWritable: true, // falseだと駄目
       isSigner: false,
     });
     remainingAccounts.push({
@@ -918,20 +843,14 @@ describe("anchor-escrow", () => {
       const { mint, tokenAmount } = account.data.parsed.info;
       console.log("taker", account.data.parsed.info);
       console.log("taker mint", mint);
-      console.log("taker tokenAmount", tokenAmount);
+      console.log("taker tokenAmount before", tokenAmount);
     });
 
     await program.rpc.exchange(
       new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
       new anchor.BN(takerAdditionalSolAmount),
-      2,
-      3,
       {
         accounts: {
-          //takerDepositTokenAccount: takerTokenAccountB,
-          //takerReceiveTokenAccount: takerTokenAccountA,
-          //initializerDepositTokenAccount: initializerTokenAccountA,
-          //initializerReceiveTokenAccount: initializerTokenAccountB,
           taker: takerMainAccount.publicKey,
           // vaultSolAccount: vaultSolAccountPda, // ここの値が違うと Error: 3012: The program expected this account to be already initialized
           initializer: initializerMainAccount.publicKey,
@@ -945,22 +864,68 @@ describe("anchor-escrow", () => {
       }
     );
 
-    /*
-    let _takerTokenAccountA = await mintA.getAccountInfo(takerTokenAccountA);
-    let _takerTokenAccountB = await mintB.getAccountInfo(takerTokenAccountB);
-    let _initializerTokenAccountA = await mintA.getAccountInfo(
-      initializerTokenAccountA
-    );
-    let _initializerTokenAccountB = await mintB.getAccountInfo(
-      initializerTokenAccountB
-    );
+    console.log("start assertion");
 
-    
-    assert.ok(_takerTokenAccountA.amount.toNumber() == initializerAmount);
-    assert.ok(_initializerTokenAccountA.amount.toNumber() == 0);
-    assert.ok(_initializerTokenAccountB.amount.toNumber() == takerAmount);
-    assert.ok(_takerTokenAccountB.amount.toNumber() == 0);
-*/
+    // NFTの数の検証
+    let _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    let _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    let _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 1);
+
+    let _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 1);
+
+    let _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 1);
+
+    let _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 1);
+
+    let _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 1);
+
+    let _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 0);
+
+    let _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 0);
+
+    let _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 0);
 
     // initializerで署名してもvaultからsol引き落とそうとしたらError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
     // のエラーがでるが、テストで保証しておきたい
@@ -1009,89 +974,33 @@ describe("anchor-escrow", () => {
       console.log("taker tokenAmount", tokenAmount);
     });
 
-    /*
-    assert.ok(
-      _escrowAccount.initializerAdditionalSolAmount.toNumber() ==
-        initializerAdditionalSolAmount
+    // Check vault
+    const _vaultA = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaA
     );
-    assert.ok(
-      _escrowAccount.takerAdditionalSolAmount.toNumber() ==
-        takerAdditionalSolAmount
+    assert.ok(_vaultA.value === null);
+
+    const _vaultB = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaB
     );
-    const initializer = await provider.connection.getAccountInfo(
-      initializerMainAccount.publicKey
+    assert.ok(_vaultB.value === null);
+
+    // check escrow account
+    try {
+      await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    } catch (err) {
+      assert.ok(err !== null);
+    }
+
+    // check escrow authority
+    const _vaultAuthority = await provider.connection.getParsedAccountInfo(
+      vaultAuthorityPda
     );
-    console.log("initializer.lamports", initializer.lamports);
-    console.log("initializerStartSolAmount", initializerStartSolAmount);
-    console.log(
-      "initializerAdditionalSolAmount",
-      initializerAdditionalSolAmount
-    );
-    assert.ok(
-      initializer.lamports ===
-        initializerStartSolAmount - initializerAdditionalSolAmount
-    );
-    const taker = await provider.connection.getAccountInfo(
-      takerMainAccount.publicKey
-    );
-    assert.ok(
-      taker.lamports === takerStartSolAmount - takerAdditionalSolAmount
-    );
-    */
+    assert.ok(_vaultAuthority.value === null);
   });
 
   it("Initialize escrow and cancel escrow by A", async () => {
-    /*
-    console.log("start mint NFT");
-    // Put back tokens into initializer token A account. このmintToはNFTを再度割り振っているだけなのでintegration時には不要な処理
-    await mintTo(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintA, // Mint for the account
-      initializerTokenAccountA.address, // Address of the account to mint to
-      mintAuthority, // Minting authority
-      1 // Amount to mint
-    );
-
-    console.log("mintTo B");
-    await mintTo(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintB, // Mint for the account
-      initializerTokenAccountB.address, // Address of the account to mint to
-      mintAuthority, // Minting authority
-      1 // Amount to mint
-    );
-
-    await mintTo(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintC, // Mint for the account
-      takerTokenAccountC.address, // Address of the account to mint to
-      mintAuthority, // Minting authority
-      1 // Amount to mint
-    );
-
-    await mintTo(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintD, // Mint for the account
-      takerTokenAccountD.address, // Address of the account to mint to
-      mintAuthority, // Minting authority
-      1 // Amount to mint
-    );
-
-    await mintTo(
-      provider.connection,
-      payer, // Payer of the transaction fees
-      mintE, // Mint for the account
-      takerTokenAccountE.address, // Address of the account to mint to
-      mintAuthority, // Minting authority
-      1 // Amount to mint
-    );
-*/
-
-    // exchangeしたなのでinitializerがC D EのNFT takerがA BのNFTを持っている
+    // exchangeした直後なのでinitializerがC D EのNFT takerがA BのNFTを持っている
     const [_vaultAccountPdaC, _vaultAccountBumpC] =
       await PublicKey.findProgramAddress(
         [
@@ -1208,11 +1117,14 @@ describe("anchor-escrow", () => {
       isSigner: false,
     });
 
+    initializerNftAmount = 3;
+    takerNftAmount = 2;
+
     await program.rpc.initialize(
       new anchor.BN(initializerAdditionalSolAmount),
       new anchor.BN(takerAdditionalSolAmount),
-      3,
-      2,
+      initializerNftAmount,
+      takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
@@ -1241,10 +1153,71 @@ describe("anchor-escrow", () => {
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
-    let _escrowAccount = await provider.connection.getAccountInfo(
+    let _escrowAccountInfo = await provider.connection.getAccountInfo(
       escrowAccount.publicKey
     );
-    console.log("_escrowAccount.lamports", _escrowAccount.lamports);
+    console.log("_escrowAccountInfo.lamports", _escrowAccountInfo.lamports);
+
+    // NFTの数の検証
+    let _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    let _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    let _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 0);
+
+    let _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 0);
+
+    let _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 0);
+
+    let _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 1);
+
+    let _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 1);
+
+    let _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 0);
+
+    let _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 0);
+
+    let _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 0);
 
     // 以下からが実際のcancel時に必要な処理
     // remaining accountsの構造　initializerの返却するNFTのみ 3で割った mod0がtoken account mod1がvault account mod2がmint
@@ -1252,12 +1225,12 @@ describe("anchor-escrow", () => {
     remainingAccounts = [];
     remainingAccounts.push({
       pubkey: initializerTokenAccountC.address,
-      isWritable: true,
+      isWritable: true, // falseだと駄目
       isSigner: false,
     });
     remainingAccounts.push({
       pubkey: vaultAccountPdaC, //vaultAccountA.publicKeyでも動くがPDAに移管
-      isWritable: true,
+      isWritable: true, // falseだと駄目
       isSigner: false,
     });
     remainingAccounts.push({
@@ -1363,6 +1336,91 @@ describe("anchor-escrow", () => {
       console.log("taker mint", mint);
       console.log("taker tokenAmount", tokenAmount);
     });
+
+    // NFTの数の検証
+    _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 1);
+
+    _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 1);
+
+    _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 1);
+
+    _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 1);
+
+    _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 1);
+
+    _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 0);
+
+    _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 0);
+
+    _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 0);
+
+    // Check vault
+    const _vaultA = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaA
+    );
+    assert.ok(_vaultA.value === null);
+
+    const _vaultB = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaB
+    );
+    assert.ok(_vaultB.value === null);
+
+    // check escrow account
+    try {
+      await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    } catch (err) {
+      assert.ok(err !== null);
+    }
+
+    // check escrow authority
+    const _vaultAuthority = await provider.connection.getParsedAccountInfo(
+      vaultAuthorityPda
+    );
+    assert.ok(_vaultAuthority.value === null);
   });
 
   it("Initialize escrow and cancel escrow by B", async () => {
@@ -1485,8 +1543,8 @@ describe("anchor-escrow", () => {
     await program.rpc.initialize(
       new anchor.BN(initializerAdditionalSolAmount),
       new anchor.BN(takerAdditionalSolAmount),
-      3,
-      2,
+      initializerNftAmount,
+      takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
       {
         accounts: {
@@ -1515,10 +1573,71 @@ describe("anchor-escrow", () => {
         ], // escrowAccount抜かすとError: Signature verification failed
       }
     );
-    let _escrowAccount = await provider.connection.getAccountInfo(
+    let _escrowAccountInfo = await provider.connection.getAccountInfo(
       escrowAccount.publicKey
     );
-    console.log("_escrowAccount.lamports", _escrowAccount.lamports);
+    console.log("_escrowAccountInfo.lamports", _escrowAccountInfo.lamports);
+
+    // NFTの数の検証
+    let _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    let _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    let _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 0);
+
+    let _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 0);
+
+    let _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 0);
+
+    let _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 1);
+
+    let _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 1);
+
+    let _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 0);
+
+    let _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 0);
+
+    let _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 0);
 
     // 以下からが実際のcancel時に必要な処理
     // remaining accountsの構造　initializerの返却するNFTのみ 3で割った mod0がtoken account mod1がvault account mod2がmint
@@ -1637,6 +1756,91 @@ describe("anchor-escrow", () => {
       console.log("taker mint", mint);
       console.log("taker tokenAmount", tokenAmount);
     });
+
+    // NFTの数の検証
+    _initializerTokenAccountA = await getAccount(
+      provider.connection,
+      initializerTokenAccountA.address
+    );
+    assert.ok(Number(_initializerTokenAccountA.amount) === 0);
+
+    _initializerTokenAccountB = await getAccount(
+      provider.connection,
+      initializerTokenAccountB.address
+    );
+    assert.ok(Number(_initializerTokenAccountB.amount) === 0);
+
+    _initializerTokenAccountC = await getAccount(
+      provider.connection,
+      initializerTokenAccountC.address
+    );
+    assert.ok(Number(_initializerTokenAccountC.amount) === 1);
+
+    _initializerTokenAccountD = await getAccount(
+      provider.connection,
+      initializerTokenAccountD.address
+    );
+    assert.ok(Number(_initializerTokenAccountD.amount) === 1);
+
+    _initializerTokenAccountE = await getAccount(
+      provider.connection,
+      initializerTokenAccountE.address
+    );
+    assert.ok(Number(_initializerTokenAccountE.amount) === 1);
+
+    _takerTokenAccountA = await getAccount(
+      provider.connection,
+      takerTokenAccountA.address
+    );
+    assert.ok(Number(_takerTokenAccountA.amount) === 1);
+
+    _takerTokenAccountB = await getAccount(
+      provider.connection,
+      takerTokenAccountB.address
+    );
+    assert.ok(Number(_takerTokenAccountB.amount) === 1);
+
+    _takerTokenAccountC = await getAccount(
+      provider.connection,
+      takerTokenAccountC.address
+    );
+    assert.ok(Number(_takerTokenAccountC.amount) === 0);
+
+    _takerTokenAccountD = await getAccount(
+      provider.connection,
+      takerTokenAccountD.address
+    );
+    assert.ok(Number(_takerTokenAccountD.amount) === 0);
+
+    _takerTokenAccountE = await getAccount(
+      provider.connection,
+      takerTokenAccountE.address
+    );
+    assert.ok(Number(_takerTokenAccountE.amount) === 0);
+
+    // Check vault
+    const _vaultA = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaA
+    );
+    assert.ok(_vaultA.value === null);
+
+    const _vaultB = await provider.connection.getParsedAccountInfo(
+      vaultAccountPdaB
+    );
+    assert.ok(_vaultB.value === null);
+
+    // check escrow account
+    try {
+      await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    } catch (err) {
+      assert.ok(err !== null);
+    }
+
+    // check escrow authority
+    const _vaultAuthority = await provider.connection.getParsedAccountInfo(
+      vaultAuthorityPda
+    );
+    assert.ok(_vaultAuthority.value === null);
   });
 
   // initializerがSOL払う場合

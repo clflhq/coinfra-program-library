@@ -24,4 +24,11 @@ pub enum MyError {
     PdaPublicKeyMismatch,
     #[msg("AssociatedAuthorityMismatch")]
     AssociatedAuthorityMismatch,
+    // 6010
+    #[msg("InitializerAdditionalSolAmountMismatch")]
+    InitializerAdditionalSolAmountMismatch,
+    #[msg("TakerAdditionalSolAmountMismatch")]
+    TakerAdditionalSolAmountMismatch,
+    #[msg("FoundNft")]
+    FoundNft,
 }
