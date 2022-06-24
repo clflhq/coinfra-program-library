@@ -33,4 +33,9 @@ pub enum MyError {
     FoundNft,
     #[msg("MintPublicKeyMismatch")]
     MintPublicKeyMismatch,
+    #[msg("InitializerInsufficientFunds")]
+    InitializerInsufficientFunds,
+    // 6015
+    #[msg("TakerInsufficientFunds")]
+    TakerInsufficientFunds,
 }

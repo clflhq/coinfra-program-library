@@ -46,10 +46,9 @@ pub fn assert_is_pda<'a>(
     bump: u8,
     vault_account_info: &AccountInfo,
     vault_authority: &Pubkey,
-    token_program_id: &Pubkey,
     program_id: &'a Pubkey,
 ) -> Result<spl_token::state::Account> {
-    assert_owned_by(vault_account_info, token_program_id)?;
+    assert_owned_by(vault_account_info, &spl_token::id())?;
 
     let vault_account: spl_token::state::Account = assert_initialized(vault_account_info)?;
 

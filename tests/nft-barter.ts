@@ -557,7 +557,6 @@ describe("anchor-escrow", () => {
     assert.ok(
       _escrowAccount.initializerKey.equals(initializerMainAccount.publicKey)
     );
-    assert.ok(_escrowAccount.initializerNftAmount === initializerNftAmount);
     assert.ok(
       _escrowAccount.initializerAdditionalSolAmount.toNumber() ===
         initializerAdditionalSolAmount
@@ -591,7 +590,6 @@ describe("anchor-escrow", () => {
     );
 
     assert.ok(_escrowAccount.takerKey.equals(takerMainAccount.publicKey));
-    assert.ok(_escrowAccount.takerNftAmount === takerNftAmount);
     assert.ok(
       _escrowAccount.takerAdditionalSolAmount.toNumber() ===
         takerAdditionalSolAmount

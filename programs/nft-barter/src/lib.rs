@@ -1,7 +1,7 @@
-use crate::utils::assert_is_ata;
+use crate::utils::{assert_is_ata, assert_owned_by};
 use crate::{errors::MyError, utils::assert_is_pda};
 
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program};
 use anchor_spl::token::{self, CloseAccount, SetAuthority, Transfer};
 use spl_token::instruction::AuthorityType;
 
@@ -40,6 +40,12 @@ pub mod nft_barter {
     ) -> Result<()> {
         msg!("start initialize");
 
+        // check account infos
+        // vault authority の検証は後半でしているから不要
+        assert_owned_by(&ctx.accounts.initializer, &ctx.accounts.system_program.key)?;
+        assert_owned_by(&ctx.accounts.taker, &ctx.accounts.system_program.key)?;
+        require_keys_eq!(ctx.accounts.token_program.key(), spl_token::id());
+
         // 両方0であることはありえない
         require_neq!(
             initializer_additional_sol_amount as usize + initializer_nft_amount as usize,
@@ -68,6 +74,13 @@ pub mod nft_barter {
             vault_account_bumps.len(),
             initializer_nft_amount_count,
             MyError::VaultAccountBumpsMismatch
+        );
+
+        // SOLの保有状況の検証
+        require_gte!(
+            ctx.accounts.initializer.try_lamports()?,
+            initializer_additional_sol_amount,
+            MyError::InitializerInsufficientFunds
         );
 
         // takerにはvaultがないため、token accountとmintだけ
@@ -192,12 +205,10 @@ pub mod nft_barter {
 
         // ここで入れたtoken accountはexchangeのときに検証
         ctx.accounts.escrow_account.initializer_key = *ctx.accounts.initializer.key;
-        ctx.accounts.escrow_account.initializer_nft_amount = initializer_nft_amount;
         ctx.accounts
             .escrow_account
             .initializer_additional_sol_amount = initializer_additional_sol_amount;
         ctx.accounts.escrow_account.taker_key = *ctx.accounts.taker.key;
-        ctx.accounts.escrow_account.taker_nft_amount = taker_nft_amount;
         ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
         ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
 
@@ -228,6 +239,12 @@ pub mod nft_barter {
         taker_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
     ) -> Result<()> {
         msg!("start exchange");
+
+        // check account infos
+        assert_owned_by(&ctx.accounts.initializer, &ctx.accounts.system_program.key)?;
+        assert_owned_by(&ctx.accounts.taker, &ctx.accounts.system_program.key)?;
+        //assert_owned_by(&ctx.accounts.vault_authority, &ctx.program_id)?;
+        require_keys_eq!(ctx.accounts.token_program.key(), spl_token::id());
 
         let initializer_nft_amount = ctx
             .accounts
@@ -263,7 +280,7 @@ pub mod nft_barter {
             MyError::TakerAdditionalSolAmountMismatch
         );
 
-        // NFTの数の検証
+        // remaining accountsの数の検証
         let initializer_nft_amount_count = initializer_nft_amount as usize;
         let taker_nft_amount_count = taker_nft_amount as usize;
         let remaining_accounts_count = (initializer_nft_amount_count * 3
@@ -291,6 +308,13 @@ pub mod nft_barter {
             MyError::PdaPublicKeyMismatch
         );
 
+        // SOLの保有状況の検証
+        require_gte!(
+            ctx.accounts.taker.try_lamports()?,
+            taker_additional_sol_amount,
+            MyError::TakerInsufficientFunds
+        );
+
         for index in 0..initializer_nft_amount_count {
             let token_account = &ctx.remaining_accounts[index * 3 + 0];
             let vault_account = &ctx.remaining_accounts[index * 3 + 1];
@@ -310,7 +334,6 @@ pub mod nft_barter {
                 ctx.accounts.escrow_account.vault_account_bumps[index],
                 vault_account,
                 &vault_authority,
-                &ctx.accounts.token_program.key,
                 ctx.program_id,
             )?;
         }
@@ -465,11 +488,9 @@ pub struct Initialize<'info> {
     // account(zero)でuninitializedを保証できるので、ts側でinitしようとするとなぜかError: 3003: Failed to deserialize the account　エラー　調べる限りspace問題なのでrustでspaceを指定することで解決
     #[account(init, payer = initializer, space = 8 // internal anchor discriminator 
         + 32 // initializerKey
-        + 1 // initializerNftAmount
         + 8 // initializerAdditionalSolAmount
         + 4 + 32 * initializer_nft_amount as usize // initializerNftTokenAccounts
         + 32 // takerKey
-        + 1 // takerNftAmount
         + 8 // takerAdditionalSolAmount
         + 4 + 32 * taker_nft_amount as usize // takerNftTokenAccounts
         + 4 + vault_account_bumps.len() // vault_account_bumps vec
@@ -551,11 +572,9 @@ pub struct CancelByTaker<'info> {
 #[account]
 pub struct EscrowAccount {
     pub initializer_key: Pubkey,
-    pub initializer_nft_amount: u8,
     pub initializer_additional_sol_amount: u64,
     pub initializer_nft_token_accounts: Vec<Pubkey>,
     pub taker_key: Pubkey,
-    pub taker_nft_amount: u8,
     pub taker_additional_sol_amount: u64,
     pub taker_nft_token_accounts: Vec<Pubkey>,
     pub vault_account_bumps: Vec<u8>,
@@ -589,6 +608,18 @@ struct CancelContext<'a, 'b, 'c, 'info> {
 
 fn cancel(cancel_context: &CancelContext) -> Result<()> {
     msg!("start cancel");
+
+    // check account infos
+    // vault authority の検証は後半でしているから不要
+    assert_owned_by(
+        &cancel_context.accounts.initializer,
+        &solana_program::system_program::id(),
+    )?;
+    assert_owned_by(
+        &cancel_context.accounts.taker,
+        &solana_program::system_program::id(),
+    )?;
+    require_keys_eq!(cancel_context.accounts.token_program.key(), spl_token::id());
 
     let ctx = cancel_context;
 
@@ -629,7 +660,6 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
             ctx.accounts.escrow_account.vault_account_bumps[index],
             vault_account,
             &vault_authority,
-            &ctx.accounts.token_program.key,
             ctx.program_id,
         )?;
 
