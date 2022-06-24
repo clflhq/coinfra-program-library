@@ -10,7 +10,7 @@ import {
   getAccount,
   Account,
 } from "@solana/spl-token";
-import { assert, expect } from "chai";
+import { assert } from "chai";
 
 describe("anchor-escrow", () => {
   // Configure the client to use the local cluster.
