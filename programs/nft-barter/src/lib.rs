@@ -24,6 +24,8 @@ pub mod nft_barter {
         system_instruction,
     };
 
+    use crate::utils::has_sufficient_funds;
+
     use super::*;
 
     // pub fn initialize(
@@ -77,11 +79,12 @@ pub mod nft_barter {
         );
 
         // SOLの保有状況の検証
-        require_gte!(
-            ctx.accounts.initializer.try_lamports()?,
+        has_sufficient_funds(
+            &ctx.accounts.initializer,
+            &ctx.accounts.taker,
             initializer_additional_sol_amount,
-            MyError::InitializerInsufficientFunds
-        );
+            taker_additional_sol_amount,
+        )?;
 
         // takerにはvaultがないため、token accountとmintだけ
         for index in 0..taker_nft_amount_count {
@@ -309,11 +312,12 @@ pub mod nft_barter {
         );
 
         // SOLの保有状況の検証
-        require_gte!(
-            ctx.accounts.taker.try_lamports()?,
+        has_sufficient_funds(
+            &ctx.accounts.initializer,
+            &ctx.accounts.taker,
+            initializer_additional_sol_amount,
             taker_additional_sol_amount,
-            MyError::TakerInsufficientFunds
-        );
+        )?;
 
         for index in 0..initializer_nft_amount_count {
             let token_account = &ctx.remaining_accounts[index * 3 + 0];
