@@ -42,40 +42,52 @@ pub fn assert_is_ata<'a>(
 }
 
 pub fn assert_is_pda<'a>(
-    token_account: &Pubkey,
+    token_account_info: &AccountInfo,
     bump: u8,
-    vault_account: &AccountInfo,
+    vault_account_info: &AccountInfo,
     vault_authority: &Pubkey,
     token_program_id: &Pubkey,
     program_id: &'a Pubkey,
 ) -> Result<spl_token::state::Account> {
-    assert_owned_by(vault_account, token_program_id)?;
+    assert_owned_by(vault_account_info, token_program_id)?;
 
-    let vault: spl_token::state::Account = assert_initialized(vault_account)?;
+    let vault_account: spl_token::state::Account = assert_initialized(vault_account_info)?;
 
     assert_keys_equal(
-        &vault.owner,
+        &vault_account.owner,
         vault_authority,
         MyError::AssociatedAuthorityMismatch,
     )?;
 
     let vault_pda = Pubkey::create_program_address(
-        &[b"vault-account", token_account.as_ref(), &[bump]],
+        &[b"vault-account", token_account_info.key().as_ref(), &[bump]],
         program_id,
     )
     .unwrap();
 
     assert_keys_equal(
         &vault_pda,
-        vault_account.key,
+        vault_account_info.key,
         MyError::AssociatedTokenPublicKeyMismatch,
     )?;
 
     // NFTをちゃんと持っていることの検証
+    let token_account: spl_token::state::Account = assert_initialized(token_account_info)?;
 
-    require_eq!(vault.amount, 1, MyError::NotFoundNft);
+    assert_keys_equal(
+        &token_account.mint,
+        &vault_account.mint,
+        MyError::MintPublicKeyMismatch,
+    )?;
+    assert_keys_equal(
+        &vault_account.owner,
+        vault_authority,
+        MyError::AssociatedAuthorityMismatch,
+    )?;
+    require_eq!(token_account.amount, 0, MyError::NotFoundNft);
+    require_eq!(vault_account.amount, 1, MyError::NotFoundNft);
 
-    Ok(vault)
+    Ok(vault_account)
 }
 
 pub fn assert_initialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -> Result<T> {

@@ -31,4 +31,6 @@ pub enum MyError {
     TakerAdditionalSolAmountMismatch,
     #[msg("FoundNft")]
     FoundNft,
+    #[msg("MintPublicKeyMismatch")]
+    MintPublicKeyMismatch,
 }

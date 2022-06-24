@@ -306,7 +306,7 @@ pub mod nft_barter {
 
             // Vaultの検証
             assert_is_pda(
-                &token_account.key,
+                &token_account,
                 ctx.accounts.escrow_account.vault_account_bumps[index],
                 vault_account,
                 &vault_authority,
@@ -625,7 +625,7 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
 
         // PDAの検証
         assert_is_pda(
-            initializer_nft_token_account.key,
+            initializer_nft_token_account,
             ctx.accounts.escrow_account.vault_account_bumps[index],
             vault_account,
             &vault_authority,
