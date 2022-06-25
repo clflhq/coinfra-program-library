@@ -10,8 +10,6 @@ use instructions::*;
 
 declare_id!("FRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2");
 
-//use crate::state::Initialize;
-
 // Context<'_, '_, '_, 'infoとContext<'info, 'info, 'info, 'infoが混じっているとthese two types are declared with different lifetimes　but data from `accounts` flows into `accounts` here
 #[program]
 pub mod nft_barter {
