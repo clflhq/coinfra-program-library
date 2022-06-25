@@ -70,12 +70,6 @@ pub fn handler<'info>(
 ) -> Result<()> {
     msg!("start initialize");
 
-    // check rent exempt
-    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.initializer.to_account_info())?;
-    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.taker.to_account_info())?;
-    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.escrow_account.to_account_info())?;
-    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.vault_authority.to_account_info())?;
-    
     // remaining_accountsの数の検証
     let initializer_nft_amount_count = initializer_nft_amount as usize;
     let taker_nft_amount_count = taker_nft_amount as usize;
