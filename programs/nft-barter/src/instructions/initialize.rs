@@ -53,7 +53,7 @@ pub struct Initialize<'info> {
         ],
         bump,
       )]
-    pub vault_authority: Box<Account<'info, VaultAuthority>>,
+    pub vault_authority: Box<Account<'info, VaultAuthority>>, // SystemAccountだとrent exemptにならない
 }
 
 // pub fn initialize(

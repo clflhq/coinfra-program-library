@@ -59,7 +59,9 @@ describe("anchor-escrow", () => {
   let takerNftAmount = 3;
 
   const initializerStartSolAmount = 2_000_000_000; // lamport
+  let initializerSolAmountAfterCreatingAta = null; // lamport
   const takerStartSolAmount = 5_000_000_000; // lamport
+  let takerSolAmountAfterCreatingAta = null; // lamport
   const initializerAdditionalSolAmount = 500_000_000; // lamport
   const takerAdditionalSolAmount = 1_000_000_000; // lamport
 
@@ -209,6 +211,31 @@ describe("anchor-escrow", () => {
     );
 
     console.log("start mintTo");
+
+    // SOLの移動検証
+    const _initializerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        initializerMainAccount.publicKey
+      );
+    console.log(
+      "_initializerMainAccountInfo.value.lamports",
+      _initializerMainAccountInfo.value.lamports
+    );
+    console.log("initializerStartSolAmount", initializerStartSolAmount);
+
+    const _takerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        takerMainAccount.publicKey
+      );
+    console.log(
+      "_takerMainAccountInfo.value.lamports",
+      _takerMainAccountInfo.value.lamports
+    );
+    console.log("takerStartSolAmount", takerStartSolAmount);
+
+    initializerSolAmountAfterCreatingAta =
+      _initializerMainAccountInfo.value.lamports;
+    takerSolAmountAfterCreatingAta = _takerMainAccountInfo.value.lamports;
 
     await mintTo(
       provider.connection,
@@ -625,14 +652,6 @@ describe("anchor-escrow", () => {
       )
     );
 
-    // SOLの移動検証
-    const _escrowAccountInfo = await provider.connection.getParsedAccountInfo(
-      escrowAccount.publicKey
-    );
-    assert.ok(
-      _escrowAccountInfo.value.lamports >= initializerAdditionalSolAmount
-    );
-
     // TODO: 連続してinitializeしたときのテスト
     // TODO: 同じ組み合わせのinitializer, takerで二重に取引できない
   });
@@ -1003,9 +1022,17 @@ describe("anchor-escrow", () => {
       _takerMainAccountInfo.value.lamports
     );
     console.log("takerStartSolAmount", takerStartSolAmount);
-
     assert.ok(
-      _initializerMainAccountInfo.value.lamports >= initializerStartSolAmount
+      _initializerMainAccountInfo.value.lamports ===
+        initializerSolAmountAfterCreatingAta -
+          initializerAdditionalSolAmount +
+          takerAdditionalSolAmount
+    );
+    assert.ok(
+      _takerMainAccountInfo.value.lamports ===
+        takerSolAmountAfterCreatingAta -
+          takerAdditionalSolAmount +
+          initializerAdditionalSolAmount
     );
   });
 
@@ -1430,6 +1457,38 @@ describe("anchor-escrow", () => {
       vaultAuthorityPda
     );
     assert.ok(_vaultAuthority.value === null);
+
+    // SOLの移動検証
+    const _initializerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        initializerMainAccount.publicKey
+      );
+    console.log(
+      "_initializerMainAccountInfo.value.lamports",
+      _initializerMainAccountInfo.value.lamports
+    );
+    console.log("initializerStartSolAmount", initializerStartSolAmount);
+
+    const _takerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        takerMainAccount.publicKey
+      );
+    console.log(
+      "_takerMainAccountInfo.value.lamports",
+      _takerMainAccountInfo.value.lamports
+    );
+    assert.ok(
+      _initializerMainAccountInfo.value.lamports ===
+        initializerSolAmountAfterCreatingAta -
+          initializerAdditionalSolAmount +
+          takerAdditionalSolAmount
+    );
+    assert.ok(
+      _takerMainAccountInfo.value.lamports ===
+        takerSolAmountAfterCreatingAta -
+          takerAdditionalSolAmount +
+          initializerAdditionalSolAmount
+    );
   });
 
   it("Initialize escrow and cancel escrow by B", async () => {
@@ -1849,6 +1908,40 @@ describe("anchor-escrow", () => {
       vaultAuthorityPda
     );
     assert.ok(_vaultAuthority.value === null);
+
+    // SOLの移動検証
+    const _initializerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        initializerMainAccount.publicKey
+      );
+    console.log(
+      "_initializerMainAccountInfo.value.lamports",
+      _initializerMainAccountInfo.value.lamports
+    );
+    console.log("initializerStartSolAmount", initializerStartSolAmount);
+
+    const _takerMainAccountInfo =
+      await provider.connection.getParsedAccountInfo(
+        takerMainAccount.publicKey
+      );
+    console.log(
+      "_takerMainAccountInfo.value.lamports",
+      _takerMainAccountInfo.value.lamports
+    );
+    console.log("takerStartSolAmount", takerStartSolAmount);
+
+    assert.ok(
+      _initializerMainAccountInfo.value.lamports ===
+        initializerSolAmountAfterCreatingAta -
+          initializerAdditionalSolAmount +
+          takerAdditionalSolAmount
+    );
+    assert.ok(
+      _takerMainAccountInfo.value.lamports ===
+        takerSolAmountAfterCreatingAta -
+          takerAdditionalSolAmount +
+          initializerAdditionalSolAmount
+    );
   });
 
   // TODO: initializerがSOL払う場合
