@@ -22,7 +22,6 @@ pub mod nft_barter {
         initializer_nft_amount: u8,
         taker_nft_amount: u8,
         vault_account_bumps: Vec<u8>,
-        vault_authority_bump: u8,
     ) -> Result<()> {
         instructions::initialize::handler(
             ctx,
@@ -31,7 +30,6 @@ pub mod nft_barter {
             initializer_nft_amount,
             taker_nft_amount,
             vault_account_bumps,
-            vault_authority_bump,
         )
     }
 
@@ -39,27 +37,23 @@ pub mod nft_barter {
         ctx: Context<'_, '_, '_, 'info, Exchange<'info>>,
         initializer_additional_sol_amount: u64,
         _taker_additional_sol_amount: u64,
-        vault_authority_bump: u8,
     ) -> Result<()> {
         instructions::exchange::handler(
             ctx,
             initializer_additional_sol_amount,
             _taker_additional_sol_amount,
-            vault_authority_bump,
         )
     }
 
     pub fn cancel_by_initializer<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByInitializer<'info>>,
-        vault_authority_bump: u8,
     ) -> Result<()> {
-        instructions::cancel_by_initializer::handler(ctx, vault_authority_bump)
+        instructions::cancel_by_initializer::handler(ctx)
     }
 
     pub fn cancel_by_taker<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
-        vault_authority_bump: u8,
     ) -> Result<()> {
-        instructions::cancel_by_taker::handler(ctx, vault_authority_bump)
+        instructions::cancel_by_taker::handler(ctx)
     }
 }

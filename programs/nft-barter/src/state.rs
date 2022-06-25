@@ -12,3 +12,8 @@ pub struct EscrowAccount {
     pub taker_nft_token_accounts: Vec<Pubkey>,
     pub vault_account_bumps: Vec<u8>,
 }
+
+#[account]
+pub struct VaultAuthority {
+    pub bump: u8,
+}

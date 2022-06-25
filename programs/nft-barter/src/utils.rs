@@ -110,3 +110,10 @@ pub fn assert_keys_equal(key1: &Pubkey, key2: &Pubkey, error_code: MyError) -> R
     require_keys_eq!(*key1, *key2, error_code);
     Ok(())
 }
+
+pub fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> Result<()> {
+    if !rent.is_exempt(account_info.lamports(), account_info.data_len()) {
+        return err!(MyError::NotRentExempt);
+    }
+    Ok(())
+}

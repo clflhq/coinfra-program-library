@@ -440,7 +440,6 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
-      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -451,7 +450,6 @@ describe("anchor-escrow", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           vaultAuthority: vaultAuthorityPda,
         },
-
         remainingAccounts,
         signers: [
           escrowAccount, // rust側でinitするために必要　escrowAccount抜かすとError: Signature verification failed
@@ -838,7 +836,6 @@ describe("anchor-escrow", () => {
     await program.rpc.exchange(
       new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
       new anchor.BN(takerAdditionalSolAmount),
-      vaultAuthorityBump,
       {
         accounts: {
           taker: takerMainAccount.publicKey,
@@ -848,6 +845,7 @@ describe("anchor-escrow", () => {
           vaultAuthority: vaultAuthorityPda,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
         remainingAccounts,
         signers: [takerMainAccount],
@@ -1152,7 +1150,6 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
-      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -1310,13 +1307,14 @@ describe("anchor-escrow", () => {
     });
 
     // Cancel the escrow.
-    await program.rpc.cancelByInitializer(vaultAuthorityBump, {
+    await program.rpc.cancelByInitializer({
       accounts: {
         initializer: initializerMainAccount.publicKey,
         taker: takerMainAccount.publicKey,
         vaultAuthority: vaultAuthorityPda,
         escrowAccount: escrowAccount.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       },
       signers: [initializerMainAccount],
       remainingAccounts,
@@ -1571,7 +1569,6 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
-      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -1729,13 +1726,14 @@ describe("anchor-escrow", () => {
     });
 
     // Cancel the escrow.
-    await program.rpc.cancelByTaker(vaultAuthorityBump, {
+    await program.rpc.cancelByTaker({
       accounts: {
         initializer: initializerMainAccount.publicKey,
         taker: takerMainAccount.publicKey,
         vaultAuthority: vaultAuthorityPda,
         escrowAccount: escrowAccount.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       },
       signers: [takerMainAccount],
       remainingAccounts,

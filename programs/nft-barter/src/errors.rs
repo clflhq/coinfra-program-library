@@ -42,4 +42,6 @@ pub enum MyError {
     InitializerPublicKeyMismatch,
     #[msg("TakerPublicKeyMismatch")]
     TakerPublicKeyMismatch,
+    #[msg("NotRentExempt")]
+    NotRentExempt,
 }

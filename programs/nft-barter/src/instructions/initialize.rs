@@ -2,9 +2,9 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, self, SetAuthority, Transfer};
 use spl_token::instruction::AuthorityType;
 
-use crate::state::{EscrowAccount, VAULT_AUTHORITY_PDA_SEED};
+use crate::state::{EscrowAccount, VAULT_AUTHORITY_PDA_SEED, VaultAuthority};
 use crate::errors::*;
-use crate::utils::assert_is_ata;
+use crate::utils::{assert_is_ata, assert_rent_exempt};
 
 use anchor_lang::solana_program::{
     program::{invoke, invoke_signed},
@@ -13,7 +13,7 @@ use anchor_lang::solana_program::{
 };
 
 #[derive(Accounts)]
-#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>, vault_authority_bump: u8)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>)]
 pub struct Initialize<'info> {
     #[account(
         mut, 
@@ -42,14 +42,18 @@ pub struct Initialize<'info> {
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
     #[account(
+        init,
+        payer = initializer,
+        space = 8 // internal anchor discriminator 
+            + 1 , // bump
         seeds = [
             VAULT_AUTHORITY_PDA_SEED,
             initializer.key().as_ref(),
             taker.key().as_ref()
         ],
-        bump = vault_authority_bump,
-    )]
-    pub vault_authority: SystemAccount<'info>,
+        bump,
+      )]
+    pub vault_authority: Box<Account<'info, VaultAuthority>>,
 }
 
 // pub fn initialize(
@@ -63,10 +67,15 @@ pub fn handler<'info>(
     initializer_nft_amount: u8,
     taker_nft_amount: u8,
     vault_account_bumps: Vec<u8>,
-    _vault_authority_bump: u8,
 ) -> Result<()> {
     msg!("start initialize");
 
+    // check rent exempt
+    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.initializer.to_account_info())?;
+    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.taker.to_account_info())?;
+    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.escrow_account.to_account_info())?;
+    assert_rent_exempt(&ctx.accounts.rent, &ctx.accounts.vault_authority.to_account_info())?;
+    
     // remaining_accountsの数の検証
     let initializer_nft_amount_count = initializer_nft_amount as usize;
     let taker_nft_amount_count = taker_nft_amount as usize;
@@ -82,6 +91,10 @@ pub fn handler<'info>(
     for index in 0..taker_nft_amount_count {
         let token_account = &ctx.remaining_accounts[offset + index * 2];
         let mint_account = &ctx.remaining_accounts[offset + index * 2 + 1];
+
+        // check rent exempt
+        assert_rent_exempt(&ctx.accounts.rent, token_account)?;
+        assert_rent_exempt(&ctx.accounts.rent, mint_account)?;
 
         // Token Accountの検証
         assert_is_ata(token_account, ctx.accounts.taker.key, mint_account, true)?;
@@ -168,6 +181,11 @@ pub fn handler<'info>(
             ],
         )?;
 
+        // check rent exempt
+        assert_rent_exempt(&ctx.accounts.rent, token_account)?;
+        assert_rent_exempt(&ctx.accounts.rent, vault_account)?;
+        assert_rent_exempt(&ctx.accounts.rent, mint_account)?;
+
         // set_authorityをしないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account?
         // classでdeserializeするときは、token::authority = initializerを指定しているので、initializerがownerになっている　今回はPDAをわたしているだけなので、signが必要
         token::set_authority(
@@ -197,6 +215,7 @@ pub fn handler<'info>(
     ctx.accounts.escrow_account.taker_key = *ctx.accounts.taker.key;
     ctx.accounts.escrow_account.taker_additional_sol_amount = taker_additional_sol_amount;
     ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
+    ctx.accounts.vault_authority.bump = *ctx.bumps.get("vault_authority").unwrap();
 
     let ix = anchor_lang::solana_program::system_instruction::transfer(
         &ctx.accounts.initializer.key(),

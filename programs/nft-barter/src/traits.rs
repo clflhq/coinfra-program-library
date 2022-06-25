@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Token, Transfer};
 
 use crate::{
-    state::{EscrowAccount, VAULT_AUTHORITY_PDA_SEED},
+    state::{EscrowAccount, VaultAuthority, VAULT_AUTHORITY_PDA_SEED},
     utils::{assert_is_ata, assert_is_pda},
 };
 
@@ -25,7 +25,6 @@ pub struct CancelContext<'a, 'b, 'c, 'info> {
     pub accounts: &'b CancelContextAccounts<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub remaining_accounts: &'c [AccountInfo<'info>],
-    pub vault_authority_bump: u8,
 }
 
 pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
@@ -64,7 +63,7 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[ctx.vault_authority_bump],
+                    &[ctx.accounts.vault_authority.bump],
                 ]]),
             1,
         )?;
@@ -77,7 +76,7 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[ctx.vault_authority_bump],
+                    &[ctx.accounts.vault_authority.bump],
                 ]]),
         )?;
     }
@@ -104,13 +103,14 @@ pub struct CancelContextAccounts<'info> {
     pub initializer: AccountInfo<'info>,
     /// CHECK: This is not dangerous because we have already validated it in the account context
     pub taker: AccountInfo<'info>,
-    pub vault_authority: SystemAccount<'info>,
+    pub vault_authority: Box<Account<'info, VaultAuthority>>,
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
     pub token_program: Program<'info, Token>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 impl<'info> Cancel<'info> for CancelContextAccounts<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info> {
+    fn vault_authority(&self) -> &Box<Account<'info, VaultAuthority>> {
         return &self.vault_authority;
     }
 
@@ -120,7 +120,7 @@ impl<'info> Cancel<'info> for CancelContextAccounts<'info> {
 }
 
 impl<'info> Common<'info> for CancelContextAccounts<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info> {
+    fn vault_authority(&self) -> &Box<Account<'info, VaultAuthority>> {
         return &self.vault_authority;
     }
 
@@ -134,7 +134,7 @@ impl<'info> Common<'info> for CancelContextAccounts<'info> {
 }
 
 pub trait Cancel<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info>;
+    fn vault_authority(&self) -> &Box<Account<'info, VaultAuthority>>;
     fn token_program(&self) -> &AccountInfo<'info>;
 
     fn into_transfer_to_initializer_context(
@@ -145,14 +145,14 @@ pub trait Cancel<'info> {
         let cpi_accounts = Transfer {
             from: vault_account.clone(),
             to: initializer_nft_token_account.clone(),
-            authority: self.vault_authority().clone(),
+            authority: self.vault_authority().to_account_info().clone(),
         };
         CpiContext::new(self.token_program().clone(), cpi_accounts)
     }
 }
 
 pub trait Common<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info>;
+    fn vault_authority(&self) -> &Box<Account<'info, VaultAuthority>>;
     fn initializer(&self) -> &AccountInfo<'info>;
     fn token_program(&self) -> &AccountInfo<'info>;
 
@@ -163,7 +163,7 @@ pub trait Common<'info> {
         let cpi_accounts = CloseAccount {
             account: vault_account.clone(),
             destination: self.initializer().clone(), // initializerに権限を返却する
-            authority: self.vault_authority().clone(),
+            authority: self.vault_authority().to_account_info().clone(),
         };
         CpiContext::new(self.token_program().clone(), cpi_accounts)
     }

@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Transfer, self, Token};
 
-use crate::{utils::{assert_is_ata, assert_is_pda}, errors::MyError, state::EscrowAccount, traits::Common};
+use crate::{utils::{assert_is_ata, assert_is_pda}, errors::MyError, state::{EscrowAccount, VaultAuthority}, traits::Common};
 
 use crate::state::VAULT_AUTHORITY_PDA_SEED;
 
 #[derive(Accounts)]
-#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, vault_authority_bump: u8)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64)]
 pub struct Exchange<'info> {
     #[account(
         mut, 
@@ -30,16 +30,19 @@ pub struct Exchange<'info> {
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
     #[account(
+        mut, 
         seeds = [
             VAULT_AUTHORITY_PDA_SEED,
             initializer.key().as_ref(),
             taker.key().as_ref()
-        ],
-        bump = vault_authority_bump,
+        ], 
+        bump = vault_authority.bump,
+        close = initializer
     )]
-    pub vault_authority: SystemAccount<'info>,
+    pub vault_authority: Box<Account<'info, VaultAuthority>>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 
@@ -47,7 +50,6 @@ pub fn handler<'info>(
     ctx: Context<'_, '_, '_, 'info, Exchange<'info>>,
     initializer_additional_sol_amount: u64,
     _taker_additional_sol_amount: u64,
-    vault_authority_bump: u8,
 ) -> Result<()> {
     msg!("start exchange");
 
@@ -94,11 +96,14 @@ pub fn handler<'info>(
     }
 
     for index in 0..taker_nft_amount_count {
+        let token_account = &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2];
+        let mint_account = &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2 + 1];
+
         // initializerのvaultがないToken Accountの検証
         assert_is_ata(
-            &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2],
+            token_account,
             ctx.accounts.initializer.key,
-            &ctx.remaining_accounts[initializer_nft_amount_count * 3 + index * 2 + 1],
+            mint_account,
             false,
         )?;
     }
@@ -109,6 +114,7 @@ pub fn handler<'info>(
         // takerのToken Accountの検証
         let token_account = &ctx.remaining_accounts[offset + index * 2];
         let mint_account = &ctx.remaining_accounts[offset + index * 2 + 1];
+
         if index >= initializer_nft_amount_count {
             assert_is_ata(token_account, ctx.accounts.taker.key, mint_account, true)?;
         } else {
@@ -155,7 +161,7 @@ pub fn handler<'info>(
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[vault_authority_bump],
+                    &[ctx.accounts.vault_authority.bump],
                 ]]),
             1,
         )?;
@@ -167,7 +173,7 @@ pub fn handler<'info>(
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[vault_authority_bump],
+                    &[ctx.accounts.vault_authority.bump],
                 ]]),
         )?;
     }
@@ -223,7 +229,7 @@ impl<'info> Exchange<'info> {
 }
 
 impl<'info> Common<'info> for Exchange<'info> {
-    fn vault_authority(&self) -> &AccountInfo<'info> {
+    fn vault_authority(&self) -> &Box<Account<'info, VaultAuthority>> {
         return &self.vault_authority;
     }
 
