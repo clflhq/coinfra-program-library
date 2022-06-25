@@ -6,9 +6,6 @@ use crate::{
     utils::{assert_is_ata, assert_is_pda},
 };
 
-/*
-Util
-*/
 /*　難関　ここで以下の仕様にあわせてlifetimeのa b cを設定しないとlifetimeエラー
 pub struct Context<'a, 'b, 'c, 'info, T> {
     /// Currently executing program id.
