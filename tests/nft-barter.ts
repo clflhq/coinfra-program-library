@@ -441,6 +441,7 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
+      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -449,6 +450,7 @@ describe("anchor-escrow", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
+          vaultAuthority: vaultAuthorityPda
         },
 
         remainingAccounts,
@@ -642,6 +644,20 @@ describe("anchor-escrow", () => {
     console.log("vaultAccountPdaA", vaultAccountPdaA);
     console.log("vaultAccountPdaB", vaultAccountPdaB);
 
+    const [_vaultAuthorityPda, _vaultAuthorityBump] =
+    await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("vault-authority"),
+        initializerMainAccount.publicKey.toBuffer(),
+        takerMainAccount.publicKey.toBuffer(),
+      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+      program.programId
+    );
+    vaultAuthorityPda = _vaultAuthorityPda;
+    vaultAuthorityBump = _vaultAuthorityBump;
+    console.log("vaultAuthorityPda", vaultAuthorityPda);
+    console.log("vaultAuthorityBump", vaultAuthorityBump);
+
     const remainingAccounts = [];
     remainingAccounts.push({
       pubkey: initializerTokenAccountA.address,
@@ -823,6 +839,7 @@ describe("anchor-escrow", () => {
     await program.rpc.exchange(
       new anchor.BN(initializerAdditionalSolAmount), // この変数がないとaccountsが読めず、taker not providedエラーが生じる
       new anchor.BN(takerAdditionalSolAmount),
+      vaultAuthorityBump,
       {
         accounts: {
           taker: takerMainAccount.publicKey,
@@ -999,6 +1016,20 @@ describe("anchor-escrow", () => {
   });
 
   it("Initialize escrow and cancel escrow by A", async () => {
+    const [_vaultAuthorityPda, _vaultAuthorityBump] =
+    await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("vault-authority"),
+        initializerMainAccount.publicKey.toBuffer(),
+        takerMainAccount.publicKey.toBuffer(),
+      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+      program.programId
+    );
+    vaultAuthorityPda = _vaultAuthorityPda;
+    vaultAuthorityBump = _vaultAuthorityBump;
+    console.log("vaultAuthorityPda", vaultAuthorityPda);
+    console.log("vaultAuthorityBump", vaultAuthorityBump);
+
     // exchangeした直後なのでinitializerがC D EのNFT takerがA BのNFTを持っている
     const [_vaultAccountPdaC, _vaultAccountBumpC] =
       await PublicKey.findProgramAddress(
@@ -1125,6 +1156,7 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
+      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -1135,6 +1167,7 @@ describe("anchor-escrow", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
+          vaultAuthority: vaultAuthorityPda
         },
         instructions: [
           // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
@@ -1297,6 +1330,7 @@ describe("anchor-escrow", () => {
     // Cancel the escrow.
     await program.rpc.cancelByInitializer(
       // new anchor.BN(initializerAdditionalSolAmount),
+      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -1423,6 +1457,20 @@ describe("anchor-escrow", () => {
   });
 
   it("Initialize escrow and cancel escrow by B", async () => {
+    const [_vaultAuthorityPda, _vaultAuthorityBump] =
+    await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("vault-authority"),
+        initializerMainAccount.publicKey.toBuffer(),
+        takerMainAccount.publicKey.toBuffer(),
+      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+      program.programId
+    );
+    vaultAuthorityPda = _vaultAuthorityPda;
+    vaultAuthorityBump = _vaultAuthorityBump;
+    console.log("vaultAuthorityPda", vaultAuthorityPda);
+    console.log("vaultAuthorityBump", vaultAuthorityBump);
+
     const [_vaultAccountPdaC, _vaultAccountBumpC] =
       await PublicKey.findProgramAddress(
         [
@@ -1545,6 +1593,7 @@ describe("anchor-escrow", () => {
       initializerNftAmount,
       takerNftAmount,
       Buffer.from(vaultAccountBumps), // 難関　Buffer.fromしないとTypeError: Blob.encode[data] requires (length 2) Buffer as src
+      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,
@@ -1555,6 +1604,7 @@ describe("anchor-escrow", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
+          vaultAuthority: vaultAuthorityPda,
         },
         instructions: [
           // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
@@ -1717,6 +1767,7 @@ describe("anchor-escrow", () => {
     // Cancel the escrow.
     await program.rpc.cancelByTaker(
       // new anchor.BN(initializerAdditionalSolAmount),
+      vaultAuthorityBump,
       {
         accounts: {
           initializer: initializerMainAccount.publicKey,

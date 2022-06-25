@@ -37,6 +37,7 @@ pub mod nft_barter {
         initializer_nft_amount: u8,
         taker_nft_amount: u8,
         vault_account_bumps: Vec<u8>,
+        _vault_authority_bump: u8,
     ) -> Result<()> {
         msg!("start initialize");
 
@@ -65,14 +66,6 @@ pub mod nft_barter {
                 .push(token_account.key());
         }
 
-        let (vault_authority, _vault_authority_bump) = Pubkey::find_program_address(
-            &[
-                VAULT_AUTHORITY_PDA_SEED,
-                ctx.accounts.initializer.key().as_ref(),
-                ctx.accounts.taker.key().as_ref(),
-            ],
-            ctx.program_id,
-        );
 
         // 3で割ってあまり0にtoken account 1にvault account 2にmint account mint accountがないとspl_token::instruction::initialize_accountが無理
         for index in 0..initializer_nft_amount_count {
@@ -155,7 +148,7 @@ pub mod nft_barter {
             token::set_authority(
                 ctx.accounts.into_set_authority_context(vault_account),
                 AuthorityType::AccountOwner,
-                Some(vault_authority),
+                Some(ctx.accounts.vault_authority.key()),
             )?;
 
             // NFTをinitializerからvaultに移す
@@ -205,6 +198,7 @@ pub mod nft_barter {
         ctx: Context<'_, '_, '_, 'info, Exchange<'info>>,
         initializer_additional_sol_amount: u64, 
         _taker_additional_sol_amount: u64, 
+        vault_authority_bump: u8
     ) -> Result<()> {
         msg!("start exchange");
 
@@ -227,22 +221,6 @@ pub mod nft_barter {
             MyError::NftAmountMismatch
         );
 
-        let (vault_authority, vault_authority_bump) = Pubkey::find_program_address(
-            &[
-                VAULT_AUTHORITY_PDA_SEED,
-                ctx.accounts.initializer.key().as_ref(),
-                ctx.accounts.taker.key().as_ref(),
-            ],
-            ctx.program_id,
-        );
-
-        // vault authorityのpubkey一致の確認
-        require_keys_eq!(
-            vault_authority,
-            ctx.accounts.vault_authority.key(),
-            MyError::PdaPublicKeyMismatch
-        );
-
         for index in 0..initializer_nft_amount_count {
             let token_account = &ctx.remaining_accounts[index * 3 + 0];
             let vault_account = &ctx.remaining_accounts[index * 3 + 1];
@@ -261,7 +239,7 @@ pub mod nft_barter {
                 &token_account,
                 ctx.accounts.escrow_account.vault_account_bumps[index],
                 vault_account,
-                &vault_authority,
+                &ctx.accounts.vault_authority.key(),
                 ctx.program_id,
             )?;
         }
@@ -369,17 +347,19 @@ pub mod nft_barter {
 
     pub fn cancel_by_initializer<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByInitializer<'info>>,
+        vault_authority_bump: u8,
     ) -> Result<()> {
         let cancel_context = &CancelContext {
             accounts: &CancelContextAccounts {
                 initializer: ctx.accounts.initializer.to_account_info().clone(),
                 taker: ctx.accounts.taker.to_account_info().clone(),
-                vault_authority: ctx.accounts.vault_authority.clone(),
+                vault_authority: ctx.accounts.vault_authority.to_account_info().clone(),
                 escrow_account: ctx.accounts.escrow_account.clone(),
                 token_program: ctx.accounts.token_program.clone(),
             },
             remaining_accounts: ctx.remaining_accounts,
             program_id: &ctx.program_id,
+            vault_authority_bump,
         };
         cancel(cancel_context)?;
         Ok(())
@@ -387,17 +367,19 @@ pub mod nft_barter {
 
     pub fn cancel_by_taker<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelByTaker<'info>>,
+        vault_authority_bump: u8,
     ) -> Result<()> {
         let cancel_context = &CancelContext {
             accounts: &CancelContextAccounts {
                 initializer: ctx.accounts.initializer.to_account_info().clone(),
                 taker: ctx.accounts.taker.to_account_info().clone(),
-                vault_authority: ctx.accounts.vault_authority.clone(),
+                vault_authority: ctx.accounts.vault_authority.to_account_info().clone(),
                 escrow_account: ctx.accounts.escrow_account.clone(),
                 token_program: ctx.accounts.token_program.clone(),
             },
             remaining_accounts: ctx.remaining_accounts,
             program_id: &ctx.program_id,
+            vault_authority_bump,
         };
         cancel(cancel_context)?;
         Ok(())
@@ -408,7 +390,7 @@ pub mod nft_barter {
 Model
 */
 #[derive(Accounts)]
-#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>, vault_authority_bump: u8)]
 pub struct Initialize<'info> {
     #[account(
         mut, 
@@ -436,10 +418,19 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
+    #[account(
+        seeds = [
+            VAULT_AUTHORITY_PDA_SEED,
+            initializer.key().as_ref(),
+            taker.key().as_ref()
+        ],
+        bump = vault_authority_bump,
+    )]
+    pub vault_authority: SystemAccount<'info>,
 }
 
 #[derive(Accounts)]
-#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64)]
+#[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, vault_authority_bump: u8)]
 pub struct Exchange<'info> {
     #[account(
         mut, 
@@ -462,22 +453,37 @@ pub struct Exchange<'info> {
         close = initializer // 関係なし Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub vault_authority: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            VAULT_AUTHORITY_PDA_SEED,
+            initializer.key().as_ref(),
+            taker.key().as_ref()
+        ],
+        bump = vault_authority_bump,
+    )]
+    pub vault_authority: SystemAccount<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
 // cancelの前に何かトランザクションを差し込まれても不利な取引が成立することはないのでcancelの場合のfrontrunningの考慮は不要
 #[derive(Accounts)]
+#[instruction(vault_authority_bump: u8)]
 pub struct CancelByInitializer<'info> {
     // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
     #[account(mut)]
     pub initializer: Signer<'info>,
     #[account()]
     pub taker: SystemAccount<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub vault_authority: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            VAULT_AUTHORITY_PDA_SEED,
+            initializer.key().as_ref(),
+            taker.key().as_ref()
+        ],
+        bump = vault_authority_bump,
+    )]
+    pub vault_authority: SystemAccount<'info>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
@@ -489,13 +495,21 @@ pub struct CancelByInitializer<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(vault_authority_bump: u8)]
 pub struct CancelByTaker<'info> {
     #[account(mut)]
     pub initializer: SystemAccount<'info>,
     #[account()]
     pub taker: Signer<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub vault_authority: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            VAULT_AUTHORITY_PDA_SEED,
+            initializer.key().as_ref(),
+            taker.key().as_ref()
+        ],
+        bump = vault_authority_bump,
+    )]
+    pub vault_authority: SystemAccount<'info>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
@@ -539,28 +553,13 @@ struct CancelContext<'a, 'b, 'c, 'info> {
     accounts: &'b CancelContextAccounts<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     remaining_accounts: &'c [AccountInfo<'info>],
+    vault_authority_bump: u8,
 }
 
 fn cancel(cancel_context: &CancelContext) -> Result<()> {
     msg!("start cancel");
 
     let ctx = cancel_context;
-
-    let (vault_authority, vault_authority_bump) = Pubkey::find_program_address(
-        &[
-            VAULT_AUTHORITY_PDA_SEED,
-            ctx.accounts.initializer.key().as_ref(),
-            ctx.accounts.taker.key().as_ref(),
-        ],
-        ctx.program_id,
-    );
-
-    // vault authorityのpubkey一致の確認
-    require_keys_eq!(
-        vault_authority,
-        ctx.accounts.vault_authority.key(),
-        MyError::PdaPublicKeyMismatch
-    );
 
     // NFTをinitializerに戻す
     let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
@@ -582,7 +581,7 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
             initializer_nft_token_account,
             ctx.accounts.escrow_account.vault_account_bumps[index],
             vault_account,
-            &vault_authority,
+            &ctx.accounts.vault_authority.key(),
             ctx.program_id,
         )?;
 
@@ -593,7 +592,7 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[vault_authority_bump],
+                    &[ctx.vault_authority_bump],
                 ]]),
             1,
         )?;
@@ -606,7 +605,7 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
                     VAULT_AUTHORITY_PDA_SEED,
                     ctx.accounts.initializer.key().as_ref(),
                     ctx.accounts.taker.key().as_ref(),
-                    &[vault_authority_bump],
+                    &[ctx.vault_authority_bump],
                 ]]),
         )?;
     }
@@ -691,7 +690,7 @@ impl<'info> Exchange<'info> {
         let cpi_accounts = Transfer {
             from: vault_account.clone(),
             to: taker_nft_token_account.clone(),
-            authority: self.vault_authority.clone(),
+            authority: self.vault_authority.to_account_info().clone(),
         };
         CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
