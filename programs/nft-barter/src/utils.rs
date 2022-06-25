@@ -7,25 +7,6 @@ use {
     spl_associated_token_account::get_associated_token_address,
 };
 
-pub fn has_sufficient_funds<'a>(
-    initializer_account_info: &AccountInfo,
-    taker_account_info: &AccountInfo,
-    initializer_additional_sol_amount: u64,
-    taker_additional_sol_amount: u64,
-) -> Result<()> {
-    require_gte!(
-        initializer_account_info.try_lamports()?,
-        initializer_additional_sol_amount,
-        MyError::InitializerInsufficientFunds
-    );
-    require_gte!(
-        taker_account_info.try_lamports()?,
-        taker_additional_sol_amount,
-        MyError::InitializerInsufficientFunds
-    );
-    Ok(())
-}
-
 pub fn assert_is_ata<'a>(
     ata: &AccountInfo,
     wallet: &Pubkey,

@@ -1,8 +1,8 @@
-use crate::utils::{assert_is_ata, assert_owned_by};
+use crate::utils::{assert_is_ata};
 use crate::{errors::MyError, utils::assert_is_pda};
 
-use anchor_lang::{prelude::*, solana_program};
-use anchor_spl::token::{self, CloseAccount, SetAuthority, Transfer};
+use anchor_lang::{prelude::*};
+use anchor_spl::token::{self, CloseAccount, SetAuthority, Token, Transfer};
 use spl_token::instruction::AuthorityType;
 
 pub mod errors;
@@ -24,8 +24,6 @@ pub mod nft_barter {
         system_instruction,
     };
 
-    use crate::utils::has_sufficient_funds;
-
     use super::*;
 
     // pub fn initialize(
@@ -42,24 +40,6 @@ pub mod nft_barter {
     ) -> Result<()> {
         msg!("start initialize");
 
-        // check account infos
-        // vault authority の検証は後半でしているから不要
-        assert_owned_by(&ctx.accounts.initializer, &ctx.accounts.system_program.key)?;
-        assert_owned_by(&ctx.accounts.taker, &ctx.accounts.system_program.key)?;
-        require_keys_eq!(ctx.accounts.token_program.key(), spl_token::id());
-
-        // 両方0であることはありえない
-        require_neq!(
-            initializer_additional_sol_amount as usize + initializer_nft_amount as usize,
-            0,
-            MyError::NotProvidedInitializerAssets
-        );
-        require_neq!(
-            taker_additional_sol_amount as usize + taker_nft_amount as usize,
-            0,
-            MyError::NotProvidedTakerAssets
-        );
-
         // remaining_accountsの数の検証
         let initializer_nft_amount_count = initializer_nft_amount as usize;
         let taker_nft_amount_count = taker_nft_amount as usize;
@@ -70,21 +50,6 @@ pub mod nft_barter {
             remaining_accounts_count,
             MyError::NftAmountMismatch
         );
-
-        // vault_account_bumpsの数の検証
-        require_eq!(
-            vault_account_bumps.len(),
-            initializer_nft_amount_count,
-            MyError::VaultAccountBumpsMismatch
-        );
-
-        // SOLの保有状況の検証
-        has_sufficient_funds(
-            &ctx.accounts.initializer,
-            &ctx.accounts.taker,
-            initializer_additional_sol_amount,
-            taker_additional_sol_amount,
-        )?;
 
         // takerにはvaultがないため、token accountとmintだけ
         for index in 0..taker_nft_amount_count {
@@ -156,7 +121,7 @@ pub mod nft_barter {
                 &create_account_ix,
                 // ctx.accounts.token_program.clone(), token programはなくても通る
                 &[
-                    ctx.accounts.initializer.clone(),
+                    ctx.accounts.initializer.to_account_info().clone(),
                     vault_account.clone(), // これないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: An account required by the instruction is missing
                 ],
                 &[&[
@@ -178,7 +143,7 @@ pub mod nft_barter {
             invoke(
                 &initialize_account_ix,
                 &[
-                    ctx.accounts.initializer.clone(),
+                    ctx.accounts.initializer.to_account_info().clone(),
                     vault_account.clone(),
                     mint_account.clone(), // なくすとmissing error
                     ctx.accounts.rent.to_account_info().clone(), // 超難関ポイント　rentがないと動かない　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: An account required by the instruction is missing
@@ -227,7 +192,7 @@ pub mod nft_barter {
         anchor_lang::solana_program::program::invoke(
             &ix,
             &[
-                ctx.accounts.initializer.clone(),
+                ctx.accounts.initializer.to_account_info().clone(),
                 ctx.accounts.escrow_account.to_account_info().clone(),
             ],
         )?;
@@ -238,17 +203,12 @@ pub mod nft_barter {
 
     pub fn exchange<'info>(
         ctx: Context<'_, '_, '_, 'info, Exchange<'info>>,
-        initializer_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
-        taker_additional_sol_amount: u64, // こいつはstateで使っているから変数の先にもってきている
+        initializer_additional_sol_amount: u64, 
+        _taker_additional_sol_amount: u64, 
     ) -> Result<()> {
         msg!("start exchange");
 
-        // check account infos
-        assert_owned_by(&ctx.accounts.initializer, &ctx.accounts.system_program.key)?;
-        assert_owned_by(&ctx.accounts.taker, &ctx.accounts.system_program.key)?;
-        //assert_owned_by(&ctx.accounts.vault_authority, &ctx.program_id)?;
-        require_keys_eq!(ctx.accounts.token_program.key(), spl_token::id());
-
+        // remaining accountsの数の検証 
         let initializer_nft_amount = ctx
             .accounts
             .escrow_account
@@ -256,36 +216,8 @@ pub mod nft_barter {
             .len();
 
         let taker_nft_amount = ctx.accounts.escrow_account.taker_nft_token_accounts.len();
-
-        // 両方0であることはありえない
-        require_neq!(
-            initializer_additional_sol_amount as usize + initializer_nft_amount as usize,
-            0,
-            MyError::NotProvidedInitializerAssets
-        );
-        require_neq!(
-            taker_additional_sol_amount as usize + taker_nft_amount as usize,
-            0,
-            MyError::NotProvidedTakerAssets
-        );
-
-        // 入力された値の検証
-        require_eq!(
-            initializer_additional_sol_amount,
-            ctx.accounts
-                .escrow_account
-                .initializer_additional_sol_amount,
-            MyError::InitializerAdditionalSolAmountMismatch
-        );
-        require_eq!(
-            taker_additional_sol_amount,
-            ctx.accounts.escrow_account.taker_additional_sol_amount,
-            MyError::TakerAdditionalSolAmountMismatch
-        );
-
-        // remaining accountsの数の検証
-        let initializer_nft_amount_count = initializer_nft_amount as usize;
-        let taker_nft_amount_count = taker_nft_amount as usize;
+        let initializer_nft_amount_count = initializer_nft_amount;
+        let taker_nft_amount_count = taker_nft_amount;
         let remaining_accounts_count = (initializer_nft_amount_count * 3
             + taker_nft_amount_count * 2) as usize
             + (initializer_nft_amount_count + taker_nft_amount_count) * 2 as usize;
@@ -310,14 +242,6 @@ pub mod nft_barter {
             ctx.accounts.vault_authority.key(),
             MyError::PdaPublicKeyMismatch
         );
-
-        // SOLの保有状況の検証
-        has_sufficient_funds(
-            &ctx.accounts.initializer,
-            &ctx.accounts.taker,
-            initializer_additional_sol_amount,
-            taker_additional_sol_amount,
-        )?;
 
         for index in 0..initializer_nft_amount_count {
             let token_account = &ctx.remaining_accounts[index * 3 + 0];
@@ -386,7 +310,10 @@ pub mod nft_barter {
         );
         anchor_lang::solana_program::program::invoke(
             &ix,
-            &[ctx.accounts.taker.clone(), ctx.accounts.initializer.clone()],
+            &[
+                ctx.accounts.taker.to_account_info().clone(),
+                ctx.accounts.initializer.to_account_info().clone(),
+            ],
         )?;
 
         // takerがtokenをget
@@ -445,8 +372,8 @@ pub mod nft_barter {
     ) -> Result<()> {
         let cancel_context = &CancelContext {
             accounts: &CancelContextAccounts {
-                initializer: ctx.accounts.initializer.clone(),
-                taker: ctx.accounts.taker.clone(),
+                initializer: ctx.accounts.initializer.to_account_info().clone(),
+                taker: ctx.accounts.taker.to_account_info().clone(),
                 vault_authority: ctx.accounts.vault_authority.clone(),
                 escrow_account: ctx.accounts.escrow_account.clone(),
                 token_program: ctx.accounts.token_program.clone(),
@@ -463,8 +390,8 @@ pub mod nft_barter {
     ) -> Result<()> {
         let cancel_context = &CancelContext {
             accounts: &CancelContextAccounts {
-                initializer: ctx.accounts.initializer.clone(),
-                taker: ctx.accounts.taker.clone(),
+                initializer: ctx.accounts.initializer.to_account_info().clone(),
+                taker: ctx.accounts.taker.to_account_info().clone(),
                 vault_authority: ctx.accounts.vault_authority.clone(),
                 escrow_account: ctx.accounts.escrow_account.clone(),
                 token_program: ctx.accounts.token_program.clone(),
@@ -483,12 +410,18 @@ Model
 #[derive(Accounts)]
 #[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64, initializer_nft_amount: u8, taker_nft_amount: u8, vault_account_bumps: Vec<u8>)]
 pub struct Initialize<'info> {
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, signer)]
-    pub initializer: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut)]
-    pub taker: AccountInfo<'info>,
+    #[account(
+        mut, 
+        constraint = initializer_additional_sol_amount as usize + initializer_nft_amount as usize > 0,
+        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount,
+        constraint = initializer_nft_amount as usize == vault_account_bumps.len()
+    )]
+    pub initializer: Signer<'info>,
+    #[account(
+        constraint = taker_additional_sol_amount as usize + taker_nft_amount as usize > 0,
+        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount,
+    )]
+    pub taker: SystemAccount<'info>,
     // account(zero)でuninitializedを保証できるので、ts側でinitしようとするとなぜかError: 3003: Failed to deserialize the account　エラー　調べる限りspace問題なのでrustでspaceを指定することで解決
     #[account(init, payer = initializer, space = 8 // internal anchor discriminator 
         + 32 // initializerKey
@@ -502,19 +435,26 @@ pub struct Initialize<'info> {
     pub escrow_account: Box<Account<'info, EscrowAccount>>, // ownerはFRd6p3td6akTgfhHgJZHyhVeyYUhGWiM9dApVucDGer2
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub token_program: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 #[instruction(initializer_additional_sol_amount: u64, taker_additional_sol_amount: u64)]
 pub struct Exchange<'info> {
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, signer)]
-    pub taker: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut)]
-    pub initializer: AccountInfo<'info>,
+    #[account(
+        mut, 
+        constraint = taker_additional_sol_amount as usize + escrow_account.taker_nft_token_accounts.len() > 0,
+        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount,
+        constraint = taker_additional_sol_amount == escrow_account.taker_additional_sol_amount 
+    )]
+    pub taker: Signer<'info>,
+    #[account(
+        mut, // mutであることが必須
+        constraint = initializer_additional_sol_amount as usize + escrow_account.initializer_nft_token_accounts.len() > 0,
+        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount,
+        constraint = initializer_additional_sol_amount == escrow_account.initializer_additional_sol_amount 
+    )]
+    pub initializer: SystemAccount<'info>,
     #[account(
         mut,
         constraint = escrow_account.initializer_key == *initializer.key,
@@ -524,8 +464,7 @@ pub struct Exchange<'info> {
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub token_program: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
@@ -533,12 +472,10 @@ pub struct Exchange<'info> {
 #[derive(Accounts)]
 pub struct CancelByInitializer<'info> {
     // signerはトランザクションに署名したことをcheckするので、実際には、initializerによるキャンセルとtakerによるキャンセルをわける必要あり
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, signer)]
-    pub initializer: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut)]
-    pub taker: AccountInfo<'info>,
+    pub initializer: Signer<'info>,
+    #[account()]
+    pub taker: SystemAccount<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
     #[account(
@@ -548,18 +485,15 @@ pub struct CancelByInitializer<'info> {
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub token_program: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct CancelByTaker<'info> {
-    /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut)]
-    pub initializer: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    #[account(mut, signer)]
-    pub taker: AccountInfo<'info>,
+    pub initializer: SystemAccount<'info>,
+    #[account()]
+    pub taker: Signer<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
     #[account(
@@ -569,8 +503,7 @@ pub struct CancelByTaker<'info> {
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub token_program: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[account]
@@ -602,9 +535,7 @@ pub struct Context<'a, 'b, 'c, 'info, T> {
     pub bumps: BTreeMap<String, u8>,
 } */
 struct CancelContext<'a, 'b, 'c, 'info> {
-    /// CHECK: This is not dangerous because we don't read or write from this account
     program_id: &'a Pubkey,
-    /// CHECK: This is not dangerous because we don't read or write from this account
     accounts: &'b CancelContextAccounts<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     remaining_accounts: &'c [AccountInfo<'info>],
@@ -612,18 +543,6 @@ struct CancelContext<'a, 'b, 'c, 'info> {
 
 fn cancel(cancel_context: &CancelContext) -> Result<()> {
     msg!("start cancel");
-
-    // check account infos
-    // vault authority の検証は後半でしているから不要
-    assert_owned_by(
-        &cancel_context.accounts.initializer,
-        &solana_program::system_program::id(),
-    )?;
-    assert_owned_by(
-        &cancel_context.accounts.taker,
-        &solana_program::system_program::id(),
-    )?;
-    require_keys_eq!(cancel_context.accounts.token_program.key(), spl_token::id());
 
     let ctx = cancel_context;
 
@@ -714,16 +633,14 @@ fn cancel(cancel_context: &CancelContext) -> Result<()> {
 }
 
 struct CancelContextAccounts<'info> {
-    /// CHECK: This is not dangerous because we don't read or write from this account
+    /// CHECK: This is not dangerous because we have already validated it in the account context
     initializer: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
+    /// CHECK: This is not dangerous because we have already validated it in the account context
     taker: AccountInfo<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     vault_authority: AccountInfo<'info>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
     escrow_account: Box<Account<'info, EscrowAccount>>,
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    token_program: AccountInfo<'info>,
+    token_program: Program<'info, Token>,
 }
 
 impl<'info> Initialize<'info> {
@@ -735,9 +652,9 @@ impl<'info> Initialize<'info> {
         let cpi_accounts = Transfer {
             from: initializer_nft_token_account.clone(),
             to: vault_account.clone(),
-            authority: self.initializer.clone(),
+            authority: self.initializer.to_account_info().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
 
     fn into_set_authority_context(
@@ -746,9 +663,9 @@ impl<'info> Initialize<'info> {
     ) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
         let cpi_accounts = SetAuthority {
             account_or_mint: vault_account.clone(),
-            current_authority: self.initializer.clone(),
+            current_authority: self.initializer.to_account_info().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
 }
 
@@ -761,9 +678,9 @@ impl<'info> Exchange<'info> {
         let cpi_accounts = Transfer {
             from: taker_nft_token_account.clone(),
             to: initializer_nft_token_account.clone(),
-            authority: self.taker.clone(),
+            authority: self.taker.to_account_info().clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
 
     fn into_transfer_to_taker_context(
@@ -776,7 +693,7 @@ impl<'info> Exchange<'info> {
             to: taker_nft_token_account.clone(),
             authority: self.vault_authority.clone(),
         };
-        CpiContext::new(self.token_program.clone(), cpi_accounts)
+        CpiContext::new(self.token_program.to_account_info().clone(), cpi_accounts)
     }
 }
 
