@@ -370,7 +370,6 @@ describe("anchor-escrow", () => {
     console.log("start initialize");
 
     // initializerはtoken accountとbump takerは直接initializerに払い出すのでtoken accountのみ
-    // writebleである必要があるかどうかは不明？
     const remainingAccounts = [];
     remainingAccounts.push({
       pubkey: initializerTokenAccountA.address,
@@ -450,7 +449,7 @@ describe("anchor-escrow", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
-          vaultAuthority: vaultAuthorityPda
+          vaultAuthority: vaultAuthorityPda,
         },
 
         remainingAccounts,
@@ -636,8 +635,8 @@ describe("anchor-escrow", () => {
       _escrowAccountInfo.value.lamports >= initializerAdditionalSolAmount
     );
 
-    // 連続してinitializeしたときのテスト
-    // 同じ組み合わせのinitializer, takerで二重に取引できない
+    // TODO: 連続してinitializeしたときのテスト
+    // TODO: 同じ組み合わせのinitializer, takerで二重に取引できない
   });
 
   it("Exchange escrow state", async () => {
@@ -645,14 +644,14 @@ describe("anchor-escrow", () => {
     console.log("vaultAccountPdaB", vaultAccountPdaB);
 
     const [_vaultAuthorityPda, _vaultAuthorityBump] =
-    await PublicKey.findProgramAddress(
-      [
-        anchor.utils.bytes.utf8.encode("vault-authority"),
-        initializerMainAccount.publicKey.toBuffer(),
-        takerMainAccount.publicKey.toBuffer(),
-      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
-      program.programId
-    );
+      await PublicKey.findProgramAddress(
+        [
+          anchor.utils.bytes.utf8.encode("vault-authority"),
+          initializerMainAccount.publicKey.toBuffer(),
+          takerMainAccount.publicKey.toBuffer(),
+        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+        program.programId
+      );
     vaultAuthorityPda = _vaultAuthorityPda;
     vaultAuthorityBump = _vaultAuthorityBump;
     console.log("vaultAuthorityPda", vaultAuthorityPda);
@@ -811,7 +810,7 @@ describe("anchor-escrow", () => {
 
     console.log(
       "initializer main account",
-      initializerMainAccount.publicKey.toBase58() // TODO: これで所有者のチェック可能
+      initializerMainAccount.publicKey.toBase58() // これで所有者のチェック可能
     );
     beforeInitializerAccounts.value.map(({ account }) => {
       const { mint, tokenAmount } = account.data.parsed.info;
@@ -918,9 +917,6 @@ describe("anchor-escrow", () => {
     );
     assert.ok(Number(_takerTokenAccountE.amount) === 0);
 
-    // initializerで署名してもvaultからsol引き落とそうとしたらError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
-    // のエラーがでるが、テストで保証しておきたい
-
     // 追加SOLのチェック token closeしないとずれる
     // close = initializerありなしでもずれる
     /* close = initializer入れてるから以下は取得できない
@@ -1017,14 +1013,14 @@ describe("anchor-escrow", () => {
 
   it("Initialize escrow and cancel escrow by A", async () => {
     const [_vaultAuthorityPda, _vaultAuthorityBump] =
-    await PublicKey.findProgramAddress(
-      [
-        anchor.utils.bytes.utf8.encode("vault-authority"),
-        initializerMainAccount.publicKey.toBuffer(),
-        takerMainAccount.publicKey.toBuffer(),
-      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
-      program.programId
-    );
+      await PublicKey.findProgramAddress(
+        [
+          anchor.utils.bytes.utf8.encode("vault-authority"),
+          initializerMainAccount.publicKey.toBuffer(),
+          takerMainAccount.publicKey.toBuffer(),
+        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+        program.programId
+      );
     vaultAuthorityPda = _vaultAuthorityPda;
     vaultAuthorityBump = _vaultAuthorityBump;
     console.log("vaultAuthorityPda", vaultAuthorityPda);
@@ -1161,28 +1157,14 @@ describe("anchor-escrow", () => {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          // vaultAccount: vaultAccountPda,
-          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
-          vaultAuthority: vaultAuthorityPda
+          vaultAuthority: vaultAuthorityPda,
         },
-        instructions: [
-          // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
-          // createTempTokenAccountAIx, RUSTに移管
-          //initTempAccountAIx,
-          //createTempTokenAccountBIx,
-          // initTempAccountBIx,
-        ],
         remainingAccounts: remainingAccounts,
-        signers: [
-          escrowAccount,
-          initializerMainAccount,
-          // vaultAccountA,
-          // vaultAccountB,
-        ], // escrowAccount抜かすとError: Signature verification failed
+        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとError: Signature verification failed
       }
     );
     let _escrowAccountInfo = await provider.connection.getAccountInfo(
@@ -1328,21 +1310,17 @@ describe("anchor-escrow", () => {
     });
 
     // Cancel the escrow.
-    await program.rpc.cancelByInitializer(
-      // new anchor.BN(initializerAdditionalSolAmount),
-      vaultAuthorityBump,
-      {
-        accounts: {
-          initializer: initializerMainAccount.publicKey,
-          taker: takerMainAccount.publicKey,
-          vaultAuthority: vaultAuthorityPda,
-          escrowAccount: escrowAccount.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        signers: [initializerMainAccount],
-        remainingAccounts,
-      }
-    );
+    await program.rpc.cancelByInitializer(vaultAuthorityBump, {
+      accounts: {
+        initializer: initializerMainAccount.publicKey,
+        taker: takerMainAccount.publicKey,
+        vaultAuthority: vaultAuthorityPda,
+        escrowAccount: escrowAccount.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [initializerMainAccount],
+      remainingAccounts,
+    });
 
     const afterInitializerAccounts =
       await provider.connection.getParsedTokenAccountsByOwner(
@@ -1458,14 +1436,14 @@ describe("anchor-escrow", () => {
 
   it("Initialize escrow and cancel escrow by B", async () => {
     const [_vaultAuthorityPda, _vaultAuthorityBump] =
-    await PublicKey.findProgramAddress(
-      [
-        anchor.utils.bytes.utf8.encode("vault-authority"),
-        initializerMainAccount.publicKey.toBuffer(),
-        takerMainAccount.publicKey.toBuffer(),
-      ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
-      program.programId
-    );
+      await PublicKey.findProgramAddress(
+        [
+          anchor.utils.bytes.utf8.encode("vault-authority"),
+          initializerMainAccount.publicKey.toBuffer(),
+          takerMainAccount.publicKey.toBuffer(),
+        ], // sampleコードではBufferが書いてあったがBufferはいらないと思われる anchor bookにはない
+        program.programId
+      );
     vaultAuthorityPda = _vaultAuthorityPda;
     vaultAuthorityBump = _vaultAuthorityBump;
     console.log("vaultAuthorityPda", vaultAuthorityPda);
@@ -1598,28 +1576,14 @@ describe("anchor-escrow", () => {
         accounts: {
           initializer: initializerMainAccount.publicKey,
           taker: takerMainAccount.publicKey,
-          // vaultAccount: vaultAccountPda,
-          // vaultSolAccount: vaultSolAccountPda,
           escrowAccount: escrowAccount.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           tokenProgram: TOKEN_PROGRAM_ID,
           vaultAuthority: vaultAuthorityPda,
         },
-        instructions: [
-          // await program.account.escrowAccount.createInstruction(escrowAccount), // 抜かすとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete
-          // createTempTokenAccountAIx, RUSTに移管
-          //initTempAccountAIx,
-          //createTempTokenAccountBIx,
-          // initTempAccountBIx,
-        ],
         remainingAccounts: remainingAccounts,
-        signers: [
-          escrowAccount,
-          initializerMainAccount,
-          // vaultAccountA,
-          // vaultAccountB,
-        ], // escrowAccount抜かすとError: Signature verification failed
+        signers: [escrowAccount, initializerMainAccount], // escrowAccount抜かすとError: Signature verification failed
       }
     );
     let _escrowAccountInfo = await provider.connection.getAccountInfo(
@@ -1765,21 +1729,17 @@ describe("anchor-escrow", () => {
     });
 
     // Cancel the escrow.
-    await program.rpc.cancelByTaker(
-      // new anchor.BN(initializerAdditionalSolAmount),
-      vaultAuthorityBump,
-      {
-        accounts: {
-          initializer: initializerMainAccount.publicKey,
-          taker: takerMainAccount.publicKey,
-          vaultAuthority: vaultAuthorityPda,
-          escrowAccount: escrowAccount.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        signers: [takerMainAccount],
-        remainingAccounts,
-      }
-    );
+    await program.rpc.cancelByTaker(vaultAuthorityBump, {
+      accounts: {
+        initializer: initializerMainAccount.publicKey,
+        taker: takerMainAccount.publicKey,
+        vaultAuthority: vaultAuthorityPda,
+        escrowAccount: escrowAccount.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [takerMainAccount],
+      remainingAccounts,
+    });
 
     const afterInitializerAccounts =
       await provider.connection.getParsedTokenAccountsByOwner(
@@ -1893,7 +1853,7 @@ describe("anchor-escrow", () => {
     assert.ok(_vaultAuthority.value === null);
   });
 
-  // initializerがSOL払う場合
+  // TODO: initializerがSOL払う場合
 
-  // takerがSOL払う場合
+  // TODO: takerがSOL払う場合
 });

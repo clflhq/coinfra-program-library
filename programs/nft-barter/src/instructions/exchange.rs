@@ -10,22 +10,22 @@ use crate::state::VAULT_AUTHORITY_PDA_SEED;
 pub struct Exchange<'info> {
     #[account(
         mut, 
-        constraint = taker_additional_sol_amount as usize + escrow_account.taker_nft_token_accounts.len() > 0,
-        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount,
-        constraint = taker_additional_sol_amount == escrow_account.taker_additional_sol_amount 
+        constraint = taker_additional_sol_amount as usize + escrow_account.taker_nft_token_accounts.len() > 0 @ MyError::NotProvidedTakerAssets,
+        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount @ MyError::TakerInsufficientFunds,
+        constraint = taker_additional_sol_amount == escrow_account.taker_additional_sol_amount @ MyError::TakerAdditionalSolAmountMismatch
     )]
     pub taker: Signer<'info>,
     #[account(
         mut, // mutであることが必須
-        constraint = initializer_additional_sol_amount as usize + escrow_account.initializer_nft_token_accounts.len() > 0,
-        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount,
-        constraint = initializer_additional_sol_amount == escrow_account.initializer_additional_sol_amount 
+        constraint = initializer_additional_sol_amount as usize + escrow_account.initializer_nft_token_accounts.len() > 0 @ MyError::NotProvidedInitializerAssets,
+        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount @ MyError::InitializerInsufficientFunds,
+        constraint = initializer_additional_sol_amount == escrow_account.initializer_additional_sol_amount @ MyError::InitializerAdditionalSolAmountMismatch
     )]
     pub initializer: SystemAccount<'info>,
     #[account(
         mut,
-        constraint = escrow_account.initializer_key == *initializer.key,
-        constraint = escrow_account.taker_key == *taker.key, // 関係なし Error: Invalid arguments: taker not provided.
+        constraint = escrow_account.initializer_key == *initializer.key @ MyError::InitializerPublicKeyMismatch,
+        constraint = escrow_account.taker_key == *taker.key @ MyError::TakerPublicKeyMismatch,
         close = initializer // 関係なし Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,

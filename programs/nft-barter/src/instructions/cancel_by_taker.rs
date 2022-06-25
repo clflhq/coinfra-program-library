@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 
 use crate::{
+    errors::MyError,
     state::{EscrowAccount, VAULT_AUTHORITY_PDA_SEED},
     traits::*,
 };
@@ -24,8 +25,8 @@ pub struct CancelByTaker<'info> {
     pub vault_authority: SystemAccount<'info>,
     #[account(
         mut,
-        constraint = escrow_account.initializer_key == *initializer.key,
-        constraint = escrow_account.taker_key == *taker.key,
+        constraint = escrow_account.initializer_key == *initializer.key @ MyError::InitializerPublicKeyMismatch,
+        constraint = escrow_account.taker_key == *taker.key @ MyError::TakerPublicKeyMismatch,
         close = initializer // accountを実行後にcloseし、initializerにrentをreturnする　
     )]
     pub escrow_account: Box<Account<'info, EscrowAccount>>,

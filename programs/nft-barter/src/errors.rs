@@ -38,4 +38,8 @@ pub enum MyError {
     // 6015
     #[msg("TakerInsufficientFunds")]
     TakerInsufficientFunds,
+    #[msg("InitializerPublicKeyMismatch")]
+    InitializerPublicKeyMismatch,
+    #[msg("TakerPublicKeyMismatch")]
+    TakerPublicKeyMismatch,
 }

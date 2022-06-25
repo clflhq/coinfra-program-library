@@ -95,10 +95,6 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
         .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
     **ctx.accounts.initializer.try_borrow_mut_lamports()? += initializer_additional_sol_amount; // ここを減らそうとすると　 Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction spent from the balance of an account it does not own
 
-    // TODO: initializer_additional_sol_amountの一致を確認
-
-    // TODO: typescript側でチェック
-
     msg!("end cancel");
     Ok(())
 }

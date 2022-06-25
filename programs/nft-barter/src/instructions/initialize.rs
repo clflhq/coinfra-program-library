@@ -1,4 +1,3 @@
-
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, self, SetAuthority, Transfer};
 use spl_token::instruction::AuthorityType;
@@ -18,14 +17,14 @@ use anchor_lang::solana_program::{
 pub struct Initialize<'info> {
     #[account(
         mut, 
-        constraint = initializer_additional_sol_amount as usize + initializer_nft_amount as usize > 0,
-        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount,
-        constraint = initializer_nft_amount as usize == vault_account_bumps.len()
+        constraint = initializer_additional_sol_amount as usize + initializer_nft_amount as usize > 0 @ MyError::NotProvidedInitializerAssets,
+        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount @ MyError::InitializerInsufficientFunds,
+        constraint = initializer_nft_amount as usize == vault_account_bumps.len() @ MyError::VaultAccountBumpsMismatch
     )]
     pub initializer: Signer<'info>,
     #[account(
-        constraint = taker_additional_sol_amount as usize + taker_nft_amount as usize > 0,
-        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount,
+        constraint = taker_additional_sol_amount as usize + taker_nft_amount as usize > 0 @ MyError::NotProvidedTakerAssets,
+        constraint = taker.to_account_info().try_lamports().unwrap() >= taker_additional_sol_amount @ MyError::TakerInsufficientFunds,
     )]
     pub taker: SystemAccount<'info>,
     // account(zero)でuninitializedを保証できるので、ts側でinitしようとするとなぜかError: 3003: Failed to deserialize the account　エラー　調べる限りspace問題なのでrustでspaceを指定することで解決
