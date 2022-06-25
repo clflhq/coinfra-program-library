@@ -86,10 +86,6 @@ pub fn handler<'info>(
         let token_account = &ctx.remaining_accounts[offset + index * 2];
         let mint_account = &ctx.remaining_accounts[offset + index * 2 + 1];
 
-        // check rent exempt
-        assert_rent_exempt(&ctx.accounts.rent, token_account)?;
-        assert_rent_exempt(&ctx.accounts.rent, mint_account)?;
-
         // Token Accountの検証
         assert_is_ata(token_account, ctx.accounts.taker.key, mint_account, true)?;
 
@@ -176,9 +172,7 @@ pub fn handler<'info>(
         )?;
 
         // check rent exempt
-        assert_rent_exempt(&ctx.accounts.rent, token_account)?;
         assert_rent_exempt(&ctx.accounts.rent, vault_account)?;
-        assert_rent_exempt(&ctx.accounts.rent, mint_account)?;
 
         // set_authorityをしないとError: failed to send transaction: Transaction simulation failed: Error processing Instruction 1: Cross-program invocation with unauthorized signer or writable account?
         // classでdeserializeするときは、token::authority = initializerを指定しているので、initializerがownerになっている　今回はPDAをわたしているだけなので、signが必要
