@@ -136,18 +136,21 @@ pub fn handler<'info>(
     // initializerがsolをget
     // walletからの引き出しなら以下のようにやる
     // taker mutでOK　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Cross-program invocation with unauthorized signer or writable account
-    let ix = anchor_lang::solana_program::system_instruction::transfer(
-        &ctx.accounts.taker.key(),
-        &ctx.accounts.initializer.key(), // sends to event host pda
-        ctx.accounts.escrow_account.taker_additional_sol_amount,
-    );
-    anchor_lang::solana_program::program::invoke(
-        &ix,
-        &[
-            ctx.accounts.taker.to_account_info().clone(),
-            ctx.accounts.initializer.to_account_info().clone(),
-        ],
-    )?;
+    let taker_additional_sol_amount = ctx.accounts.escrow_account.taker_additional_sol_amount;
+    if taker_additional_sol_amount > 0 {
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.taker.key(),
+            &ctx.accounts.initializer.key(), // sends to event host pda
+            taker_additional_sol_amount,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.taker.to_account_info().clone(),
+                ctx.accounts.initializer.to_account_info().clone(),
+            ],
+        )?;
+    }
 
     // takerがtokenをget
     for index in 0..initializer_nft_amount_count {
@@ -182,12 +185,14 @@ pub fn handler<'info>(
     // PDAからの引き出しなら以下のようにやる
     // 　Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: instruction changed the balance of a read-only account
     // 以下の構文はPDAのときだけしか使えない
-    **ctx
+    if initializer_additional_sol_amount > 0 {
+        **ctx
         .accounts
         .escrow_account
         .to_account_info()
         .try_borrow_mut_lamports()? -= initializer_additional_sol_amount;
-    **ctx.accounts.taker.try_borrow_mut_lamports()? += initializer_additional_sol_amount;
+        **ctx.accounts.taker.try_borrow_mut_lamports()? += initializer_additional_sol_amount;
+    }
 
     /*
     //　vault_sol_accountから齋藤に送る

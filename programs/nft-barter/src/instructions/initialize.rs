@@ -205,22 +205,24 @@ pub fn handler<'info>(
     ctx.accounts.escrow_account.vault_account_bumps = vault_account_bumps;
     ctx.accounts.vault_authority.bump = *ctx.bumps.get("vault_authority").unwrap();
 
-    let ix = anchor_lang::solana_program::system_instruction::transfer(
-        &ctx.accounts.initializer.key(),
-        &ctx.accounts.escrow_account.key(), // sends to event host pda
-        initializer_additional_sol_amount,
-    );
-
-    // account_infosにctx.accounts.system_program.to_account_info()はなくてもいい
-    // invoke_signedの必要もなし だが、account_infoはいずれにしても必須
-    // ctx.accounts.initializer.clone() ないとAn account required by the instruction is missing
-    anchor_lang::solana_program::program::invoke(
-        &ix,
-        &[
-            ctx.accounts.initializer.to_account_info().clone(),
-            ctx.accounts.escrow_account.to_account_info().clone(),
-        ],
-    )?;
+    if initializer_additional_sol_amount > 0 {
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.initializer.key(),
+            &ctx.accounts.escrow_account.key(), // sends to event host pda
+            initializer_additional_sol_amount,
+        );
+    
+        // account_infosにctx.accounts.system_program.to_account_info()はなくてもいい
+        // invoke_signedの必要もなし だが、account_infoはいずれにしても必須
+        // ctx.accounts.initializer.clone() ないとAn account required by the instruction is missing
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.initializer.to_account_info().clone(),
+                ctx.accounts.escrow_account.to_account_info().clone(),
+            ],
+        )?;
+    }
 
     msg!("end initialize");
     Ok(())
