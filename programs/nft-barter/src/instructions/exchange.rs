@@ -54,11 +54,6 @@ pub fn handler<'info>(
     msg!("start exchange");
 
     // remaining accountsの数の検証
-    require_neq!(
-        ctx.remaining_accounts.len(),
-        0,
-        MyError::NotFoundRemainingAccounts
-    );
     let initializer_nft_amount = ctx
         .accounts
         .escrow_account

@@ -34,20 +34,13 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
     let ctx = cancel_context;
 
     // remaining_accountsの数の検証
-    require_neq!(
-        ctx.remaining_accounts.len(),
-        0,
-        MyError::NotFoundRemainingAccounts
-    );
-    let initializer_nft_amount_count = ctx
-        .accounts
-        .escrow_account
-        .initializer_nft_token_accounts
-        .len();
-    let remaining_accounts_count = initializer_nft_amount_count * 3; // initializerはtoken accountとvaultとmint takerは直接initializerに払い出すのでなし
     require_eq!(
         ctx.remaining_accounts.len(),
-        remaining_accounts_count,
+        ctx.accounts
+            .escrow_account
+            .initializer_nft_token_accounts
+            .len()
+            * 3,
         MyError::NftAmountMismatch
     );
 

@@ -71,11 +71,6 @@ pub fn handler<'info>(
     msg!("start initialize");
 
     // remaining_accountsの数の検証
-    require_neq!(
-        ctx.remaining_accounts.len(),
-        0,
-        MyError::NotFoundRemainingAccounts
-    );
     let initializer_nft_amount_count = initializer_nft_amount as usize;
     let taker_nft_amount_count = taker_nft_amount as usize;
     let offset = initializer_nft_amount_count * 3 as usize;
