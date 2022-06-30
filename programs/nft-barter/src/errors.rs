@@ -44,4 +44,6 @@ pub enum MyError {
     TakerPublicKeyMismatch,
     #[msg("NotRentExempt")]
     NotRentExempt,
+    #[msg("NotFoundRemainingAccounts")]
+    NotFoundRemainingAccounts,
 }

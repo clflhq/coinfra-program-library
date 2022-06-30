@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Token, Transfer};
 
 use crate::{
+    errors::MyError,
     state::{EscrowAccount, VaultAuthority, VAULT_AUTHORITY_PDA_SEED},
     utils::{assert_is_ata, assert_is_pda},
 };
@@ -31,6 +32,24 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
     msg!("start cancel");
 
     let ctx = cancel_context;
+
+    // remaining_accountsの数の検証
+    require_neq!(
+        ctx.remaining_accounts.len(),
+        0,
+        MyError::NotFoundRemainingAccounts
+    );
+    let initializer_nft_amount_count = ctx
+        .accounts
+        .escrow_account
+        .initializer_nft_token_accounts
+        .len();
+    let remaining_accounts_count = initializer_nft_amount_count * 3; // initializerはtoken accountとvaultとmint takerは直接initializerに払い出すのでなし
+    require_eq!(
+        ctx.remaining_accounts.len(),
+        remaining_accounts_count,
+        MyError::NftAmountMismatch
+    );
 
     // NFTをinitializerに戻す
     let initializer_nft_amount_count = &ctx.remaining_accounts.len() / 3;
