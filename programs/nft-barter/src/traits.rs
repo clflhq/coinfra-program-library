@@ -4,7 +4,7 @@ use anchor_spl::token::{self, CloseAccount, Token, Transfer};
 use crate::{
     errors::MyError,
     state::{EscrowAccount, VaultAuthority, VAULT_AUTHORITY_PDA_SEED},
-    utils::{assert_is_ata, assert_is_pda},
+    utils::{assert_is_ata, assert_is_pda, assert_keys_equal},
 };
 
 /*　難関　ここで以下の仕様にあわせてlifetimeのa b cを設定しないとlifetimeエラー
@@ -50,6 +50,13 @@ pub fn cancel(cancel_context: &CancelContext) -> Result<()> {
         let initializer_nft_token_account = &ctx.remaining_accounts[index * 3];
         let vault_account = &ctx.remaining_accounts[index * 3 + 1];
         let mint_account = &ctx.remaining_accounts[index * 3 + 2];
+
+        // escrow accountの中身と検証
+        assert_keys_equal(
+            &initializer_nft_token_account.key(),
+            &ctx.accounts.escrow_account.initializer_nft_token_accounts[index],
+            MyError::AssociatedTokenPublicKeyMismatch,
+        )?;
 
         // token accountの検証
         let _account = assert_is_ata(

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Transfer, self, Token};
 
-use crate::{utils::{assert_is_ata, assert_is_pda}, errors::MyError, state::{EscrowAccount, VaultAuthority}, traits::Common};
+use crate::{utils::{assert_is_ata, assert_is_pda, assert_keys_equal}, errors::MyError, state::{EscrowAccount, VaultAuthority}, traits::Common};
 
 use crate::state::VAULT_AUTHORITY_PDA_SEED;
 
@@ -77,6 +77,13 @@ pub fn handler<'info>(
         let vault_account = &ctx.remaining_accounts[index * 3 + 1];
         let mint_account = &ctx.remaining_accounts[index * 3 + 2];
 
+        // escrow accountの中身と検証
+        assert_keys_equal(
+            &token_account.key(),
+            &ctx.accounts.escrow_account.initializer_nft_token_accounts[index],
+            MyError::AssociatedTokenPublicKeyMismatch,
+        )?;
+
         // initializerのvaultがあるToken Accountの検証
         assert_is_ata(
             token_account,
@@ -111,11 +118,18 @@ pub fn handler<'info>(
     let offset = initializer_nft_amount_count * 3 + taker_nft_amount_count * 2;
 
     for index in 0..initializer_nft_amount_count + taker_nft_amount_count {
-        // takerのToken Accountの検証
         let token_account = &ctx.remaining_accounts[offset + index * 2];
         let mint_account = &ctx.remaining_accounts[offset + index * 2 + 1];
 
+        // takerのToken Accountの検証
         if index >= initializer_nft_amount_count {
+            // escrow accountの中身と検証
+            assert_keys_equal(
+                &token_account.key(),
+                &ctx.accounts.escrow_account.taker_nft_token_accounts[index-initializer_nft_amount_count],
+                MyError::AssociatedTokenPublicKeyMismatch,
+            )?;
+
             assert_is_ata(token_account, ctx.accounts.taker.key, mint_account, true)?;
         } else {
             assert_is_ata(token_account, ctx.accounts.taker.key, mint_account, false)?;
