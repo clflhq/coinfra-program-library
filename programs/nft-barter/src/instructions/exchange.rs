@@ -18,7 +18,7 @@ pub struct Exchange<'info> {
     #[account(
         mut, // mutであることが必須
         constraint = initializer_additional_sol_amount as usize + escrow_account.initializer_nft_token_accounts.len() > 0 @ MyError::NotProvidedInitializerAssets,
-        constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount @ MyError::InitializerInsufficientFunds,
+        // constraint = initializer.to_account_info().try_lamports().unwrap() >= initializer_additional_sol_amount @ MyError::InitializerInsufficientFunds, initialze時点でescrowにお金が移動しているので不要
         constraint = initializer_additional_sol_amount == escrow_account.initializer_additional_sol_amount @ MyError::InitializerAdditionalSolAmountMismatch
     )]
     pub initializer: SystemAccount<'info>,
